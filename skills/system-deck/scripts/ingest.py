@@ -51,7 +51,7 @@ def _own_text(p: ET.Element) -> str:
     def walk(el: ET.Element):
         for c in el:
             name = _local(c.tag)
-            if name == "tbl":
+            if name in ("tbl", "ctrl"):   # ctrl: 입력 안내 필드·머리말/꼬리말·각주 등 본문이 아닌 부속 내용
                 continue
             if name == "t":
                 out.append("".join(c.itertext()))
@@ -93,7 +93,7 @@ def _cell_text(tc: ET.Element) -> str:
                     parts.append(t)
                 for tb in _tables_in(c):
                     parts.append(" / ".join(" ".join(r) for r in _table_rows(tb)))
-            else:
+            elif n != "ctrl":
                 walk(c)
 
     walk(tc)
@@ -101,13 +101,44 @@ def _cell_text(tc: ET.Element) -> str:
 
 
 def _table_rows(tbl: ET.Element) -> list[list[str]]:
-    rows: list[list[str]] = []
+    """표를 2차원 격자로. 병합 셀은 cellAddr/cellSpan 으로 제자리에 놓는다.
+    가로 병합은 첫 칸에만 글을 두고, 세로 병합은 아래 칸에도 같은 글을 반복한다(행 라벨 유지)."""
+    cells: list[tuple[ET.Element, tuple | None, tuple]] = []
     for tr in tbl:
         if _local(tr.tag) != "tr":
             continue
-        row = [_cell_text(tc) for tc in tr if _local(tc.tag) == "tc"]
-        if row:
-            rows.append(row)
+        for tc in tr:
+            if _local(tc.tag) != "tc":
+                continue
+            addr, span = None, (1, 1)
+            for c in tc:
+                n = _local(c.tag)
+                if n == "cellAddr":
+                    addr = (int(c.get("colAddr", 0)), int(c.get("rowAddr", 0)))
+                elif n == "cellSpan":
+                    span = (max(1, int(c.get("colSpan", 1))), max(1, int(c.get("rowSpan", 1))))
+            cells.append((tc, addr, span))
+    if not cells:
+        return []
+    if all(a is not None for _, a, _ in cells):
+        R = max(a[1] + s[1] for _, a, s in cells)
+        C = max(a[0] + s[0] for _, a, s in cells)
+        if R * C <= 200_000:
+            grid = [[""] * C for _ in range(R)]
+            for tc, (c0, r0), (cs, rs) in cells:
+                text = _cell_text(tc)
+                grid[r0][c0] = text
+                for k in range(1, rs):
+                    if r0 + k < R:
+                        grid[r0 + k][c0] = text
+            return [r for r in grid if any(x for x in r)] or grid[:1]
+    # 주소 정보가 없으면 tc 순서대로
+    rows: list[list[str]] = []
+    for tr in tbl:
+        if _local(tr.tag) == "tr":
+            row = [_cell_text(tc) for tc in tr if _local(tc.tag) == "tc"]
+            if row:
+                rows.append(row)
     return rows
 
 
@@ -143,7 +174,12 @@ def parse_hwpx(path: Path) -> str:
                 if t:
                     out.append(t)
                 for tb in _tables_in(p):
-                    md = _rows_to_md(_table_rows(tb))
+                    rows = _table_rows(tb)
+                    if rows and (len(rows) == 1 or max(len(r) for r in rows) == 1):
+                        # 한 줄/한 칸짜리 표는 데이터 표가 아니라 제목 상자·강조 상자로 쓰인 것 → 문단으로
+                        out.extend(" ".join(x for x in dict.fromkeys(r) if x) for r in rows if any(r))
+                        continue
+                    md = _rows_to_md(rows)
                     if md:
                         out.append("\n" + md + "\n")
     return "\n\n".join(out)
@@ -160,7 +196,7 @@ def _is_nested_p(root: ET.Element, p: ET.Element) -> bool:
         _PARENT_CACHE[id(root)] = pm
     cur = pm.get(p)
     while cur is not None:
-        if _local(cur.tag) in ("tc", "tbl"):
+        if _local(cur.tag) in ("tc", "tbl", "ctrl"):
             return True
         cur = pm.get(cur)
     return False
@@ -242,21 +278,31 @@ def _split_row(line: str) -> list[str]:
     return cells
 
 
-def _suggest(header: list[str], rows: list[list[str]]) -> tuple[str, list[int]]:
+_ID_HDR = re.compile(r"번호|순번|연번|순위|계급|등급|코드|^no\.?$|^id$", re.I)   # 숫자처럼 보여도 지표가 아닌 식별자 열
+
+
+def _suggest(header: list[str], rows: list[list[str]]) -> tuple[str, list[int], float]:
+    """(추천 슬라이드 타입, 숫자 지표 열, 빈 칸 비율). 크고 성긴 표는 변환하지 않고 발췌만 권한다."""
     ncols = len(header)
-    num_cols = [c for c in range(ncols) if rows and sum(bool(_NUM.match(r[c])) for r in rows if c < len(r)) >= max(1, len(rows) * 0.6)]
+    cells = [c for r in rows for c in r]
+    empty = round(sum(1 for c in cells if not c) / len(cells), 2) if cells else 0.0
+    num_cols = [c for c in range(ncols)
+                if rows and not _ID_HDR.search(header[c].replace(" ", ""))
+                and sum(bool(_NUM.match(r[c])) for r in rows if c < len(r)) >= max(1, len(rows) * 0.6)]
+    if len(rows) > 12 or ncols > 8 or empty > 0.4:
+        return "excerpt", num_cols, empty      # 예산표·코드표 등. 슬라이드에는 핵심 행 3~4개만 발췌
     first = [r[0] for r in rows if r]
     if first and sum(bool(_PERIOD.match(x)) for x in first) >= max(2, len(first) * 0.6):
-        return "timeline", num_cols
+        return "timeline", num_cols, empty
     if num_cols and len(rows) <= 4:
-        return "stats", num_cols
+        return "stats", num_cols, empty
     if num_cols:
-        return "stats(상위 4행 선별)", num_cols
+        return "stats(상위 4행 선별)", num_cols, empty
     if ncols == 2 and len(rows) <= 6:
-        return "split", num_cols
+        return "split", num_cols, empty
     if len(rows) <= 4:
-        return "bento", num_cols
-    return "bullets(요약)", num_cols
+        return "bento", num_cols, empty
+    return "bullets(요약)", num_cols, empty
 
 
 def extract_tables(md: str, source: str, start_no: int = 1) -> tuple[str, list[dict]]:
@@ -272,9 +318,9 @@ def extract_tables(md: str, source: str, start_no: int = 1) -> tuple[str, list[d
                 j += 1
             header = _split_row(lines[i])
             rows = [_split_row(x) for x in lines[i + 2:j]]
-            kind, num_cols = _suggest(header, rows)
+            kind, num_cols, empty = _suggest(header, rows)
             tables.append({"no": no, "source": source, "header": header, "rows": rows,
-                           "numeric_cols": num_cols, "suggest": kind})
+                           "numeric_cols": num_cols, "empty_ratio": empty, "suggest": kind})
             out.append(f"> [표 {no} · {source}]")
             out.extend(lines[i:j])
             no += 1

@@ -57,6 +57,49 @@ class HwpxTest(unittest.TestCase):
         md, tables = ingest.extract_tables(ingest.parse_hwpx(f), "e.hwpx")
         self.assertEqual(tables[0]["rows"][0], ["x|y", "z"])
 
+    def test_ctrl_content_excluded(self):
+        # 입력 안내 필드/머리말(ctrl) 안의 문단과 텍스트는 본문에 섞이지 않는다
+        guide = '<hp:ctrl><hp:fieldBegin><hp:subList><hp:p><hp:run><hp:t>안내문구</hp:t></hp:run></hp:p></hp:subList></hp:fieldBegin></hp:ctrl>'
+        body = '<hp:p><hp:run><hp:t>앞 </hp:t>' + guide + '<hp:t>뒤</hp:t></hp:run></hp:p>'
+        f = self.tmp / "c.hwpx"
+        make_hwpx(f, [body])
+        md = ingest.parse_hwpx(f)
+        self.assertEqual(md.strip(), "앞 뒤")
+        self.assertNotIn("안내문구", md)
+
+    def test_merged_cells_placed_by_address(self):
+        def tc(text, col, row, cs=1, rs=1):
+            return (f'<hp:tc><hp:subList>{p(text)}</hp:subList><hp:cellAddr colAddr="{col}" rowAddr="{row}"/>'
+                    f'<hp:cellSpan colSpan="{cs}" rowSpan="{rs}"/></hp:tc>')
+        rows = ('<hp:tr>' + tc("구분", 0, 0) + tc("항목", 1, 0) + tc("값", 2, 0) + '</hp:tr>'
+                '<hp:tr>' + tc("지연", 0, 1, rs=2) + tc("평균", 1, 1) + tc("42ms", 2, 1) + '</hp:tr>'
+                '<hp:tr>' + tc("최대", 1, 2) + tc("90ms", 2, 2) + '</hp:tr>')
+        f = self.tmp / "m.hwpx"
+        make_hwpx(f, [f'<hp:p><hp:run><hp:tbl>{rows}</hp:tbl></hp:run></hp:p>'])
+        _, t = ingest.extract_tables(ingest.parse_hwpx(f), "m.hwpx")
+        self.assertEqual(t[0]["header"], ["구분", "항목", "값"])
+        self.assertEqual(t[0]["rows"], [["지연", "평균", "42ms"], ["지연", "최대", "90ms"]])   # 세로 병합은 라벨 반복
+
+    def test_horizontal_merge_leaves_blank(self):
+        def tc(text, col, row, cs=1):
+            return (f'<hp:tc><hp:subList>{p(text)}</hp:subList><hp:cellAddr colAddr="{col}" rowAddr="{row}"/>'
+                    f'<hp:cellSpan colSpan="{cs}" rowSpan="1"/></hp:tc>')
+        rows = ('<hp:tr>' + tc("제목", 0, 0, cs=2) + '</hp:tr>'
+                '<hp:tr>' + tc("a", 0, 1) + tc("b", 1, 1) + '</hp:tr>'
+                '<hp:tr>' + tc("c", 0, 2) + tc("d", 1, 2) + '</hp:tr>')
+        f = self.tmp / "h.hwpx"
+        make_hwpx(f, [f'<hp:p><hp:run><hp:tbl>{rows}</hp:tbl></hp:run></hp:p>'])
+        _, t = ingest.extract_tables(ingest.parse_hwpx(f), "h.hwpx")
+        self.assertEqual(t[0]["header"], ["제목", ""])
+        self.assertEqual(t[0]["rows"], [["a", "b"], ["c", "d"]])
+
+    def test_single_row_table_becomes_paragraph(self):
+        f = self.tmp / "s.hwpx"
+        make_hwpx(f, [tbl([[p("박스 제목"), p("부제")]]) + p("본문")])
+        md = ingest.parse_hwpx(f)
+        self.assertNotIn("|", md)
+        self.assertIn("박스 제목 부제", md)
+
     def test_not_a_zip(self):
         f = self.tmp / "bad.hwpx"
         f.write_bytes(b"not a zip")
@@ -83,6 +126,22 @@ class TableSuggestTest(unittest.TestCase):
     def test_timeline(self):
         t = self.tables("| 시기 | 내용 |\n|---|---|\n| 2026.08 | 설계 |\n| 2026.09 | 구현 |\n| 2026.10 | 배포 |\n")
         self.assertEqual(t[0]["suggest"], "timeline")
+
+    def test_id_columns_are_not_metrics(self):
+        t = self.tables("| 번호 | 특성 | 계급 |\n|---|---|---|\n| 1 | 잎 모양 | 3 |\n| 2 | 잎 색 | 5 |\n| 3 | 키 | 7 |\n")
+        self.assertEqual(t[0]["numeric_cols"], [])
+        self.assertNotEqual(t[0]["suggest"], "stats")
+
+    def test_large_or_sparse_tables_are_excerpt(self):
+        rows = "".join(f"| {i}월 | {i * 10} |\n" for i in range(1, 16))
+        t = self.tables("| 월 | 값 |\n|---|---|\n" + rows)
+        self.assertEqual(t[0]["suggest"], "excerpt")              # 15행
+        wide = "| " + " | ".join(f"h{i}" for i in range(10)) + " |\n|" + "---|" * 10 + "\n| " + " | ".join("1" for _ in range(10)) + " |\n"
+        self.assertEqual(self.tables(wide)[0]["suggest"], "excerpt")   # 10열
+        sparse = "| a | b | c | d |\n|---|---|---|---|\n| 1 |  |  |  |\n|  | 2 |  |  |\n"
+        t = self.tables(sparse)
+        self.assertEqual(t[0]["suggest"], "excerpt")
+        self.assertGreater(t[0]["empty_ratio"], 0.4)
 
     def test_marker_and_numbering(self):
         md, t = ingest.extract_tables("본문\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n| c | d |\n|---|---|\n| x | y |\n", "f.md")
