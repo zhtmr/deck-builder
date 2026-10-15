@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="680" viewBox="0 0 1200 680" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect width="1200" height="680" fill="#0d121c"/>
+  <rect width="1200" height="48" fill="#111826"/>
+  <circle cx="26" cy="24" r="6" fill="#ff5f57"/><circle cx="48" cy="24" r="6" fill="#febc2e"/><circle cx="70" cy="24" r="6" fill="#28c840"/>
+  <text x="600" y="30" fill="#7d89a6" font-size="14" text-anchor="middle">Auth Gateway — Overview (예시 화면)</text>
+  <rect x="0" y="48" width="200" height="632" fill="#0a0f19"/>
+  <g fill="#8d97ad" font-size="15">
+    <text x="28" y="96" fill="#e8edf7" font-weight="600">Overview</text>
+    <text x="28" y="136">Tokens</text><text x="28" y="176">Sessions</text><text x="28" y="216">Policies</text><text x="28" y="256">Audit log</text>
+  </g>
+  <g>
+    <rect x="228" y="76" width="280" height="130" rx="14" fill="#131b2b" stroke="#1f2a40"/>
+    <text x="252" y="112" fill="#8d97ad" font-size="14">요청 처리량</text>
+    <text x="252" y="164" fill="#e8edf7" font-size="40" font-weight="600">1.6M/s</text>
+    <rect x="532" y="76" width="280" height="130" rx="14" fill="#131b2b" stroke="#1f2a40"/>
+    <text x="556" y="112" fill="#8d97ad" font-size="14">평균 지연</text>
+    <text x="556" y="164" fill="#34d399" font-size="40" font-weight="600">1.8 ms</text>
+    <rect x="836" y="76" width="340" height="130" rx="14" fill="#131b2b" stroke="#1f2a40"/>
+    <text x="860" y="112" fill="#8d97ad" font-size="14">캐시 적중률</text>
+    <text x="860" y="164" fill="#e8edf7" font-size="40" font-weight="600">97.2%</text>
+  </g>
+  <rect x="228" y="230" width="948" height="260" rx="14" fill="#131b2b" stroke="#1f2a40"/>
+  <text x="252" y="266" fill="#8d97ad" font-size="14">지연 시간 추이 (최근 24시간)</text>
+  <polyline fill="none" stroke="#60a5fa" stroke-width="3" stroke-linejoin="round"
+    points="252,440 330,430 408,436 486,410 564,420 642,396 720,402 798,380 876,386 954,366 1032,372 1150,350"/>
+  <rect x="228" y="514" width="948" height="140" rx="14" fill="#131b2b" stroke="#1f2a40"/>
+  <text x="252" y="550" fill="#8d97ad" font-size="14">최근 이벤트</text>
+  <g font-size="15" fill="#c5cde0">
+    <text x="252" y="582">10:42  토큰 블랙리스트 동기화 완료</text>
+    <text x="252" y="610">10:40  신규 서명 키 배포</text>
+    <text x="252" y="638">10:31  레거시 세션 경로 제거</text>
+  </g>
+</svg>

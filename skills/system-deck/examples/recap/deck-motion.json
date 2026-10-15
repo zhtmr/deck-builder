@@ -1,0 +1,110 @@
+{
+  "title": "Recap 모션 장표 예시",
+  "subtitle": "terminal · bento · timeline · 카운트업 · 코드 워크스루",
+  "eyebrow": "deck-builder 신규 슬라이드 타입 데모",
+  "author": "데모",
+  "date": "2026.10",
+  "theme": "aurora",
+  "model": "system-model.json",
+  "slides": [
+    { "type": "title", "notes": "신규 슬라이드 타입을 한 번에 보여 주는 데모 장표예요. 수치는 모두 예시입니다." },
+    {
+      "type": "image",
+      "title": "운영 화면에서 확인한 결과",
+      "src": "assets/dashboard.svg",
+      "alt": "인증 게이트웨이 대시보드 예시 화면",
+      "caption": "→ 키마다 확인할 영역이 하나씩 강조돼요",
+      "marks": [
+        { "box": [19, 11, 23.5, 19], "note": "처리량" },
+        { "box": [44.5, 11, 23.5, 19], "note": "지연 시간" },
+        { "box": [19, 34, 79, 38], "note": "24시간 추이" }
+      ],
+      "notes": "스크린샷 위에 단계별 하이라이트 박스를 띄웁니다."
+    },
+    {
+      "type": "terminal",
+      "title": "배포 전 점검 결과",
+      "window_title": "preflight — zsh",
+      "command": "npm run preflight",
+      "items": [
+        { "label": "타입 검사", "status": "OK", "detail": "0 errors", "source": "예시" },
+        { "label": "단위 테스트", "status": "OK", "detail": "42/42", "source": "예시" },
+        { "label": "마이그레이션 드라이런", "status": "WARN", "progress": 80, "detail": "1 경고", "source": "예시" }
+      ],
+      "summary": "차단 항목 없음 — 경고 1건 확인 후 배포",
+      "notes": "→ 키를 누를 때마다 항목이 하나씩 차오르고 상태 배지가 튀어 나옵니다."
+    },
+    {
+      "type": "stats",
+      "title": "응답 시간이 줄었어요",
+      "items": [
+        { "value": "1,600,000", "label": "초당 처리량", "hint": "숫자가 0에서 목표값까지 올라가요", "bar": 96, "source": "예시" },
+        { "value": "42ms", "label": "기존 평균 지연", "hint": "비교 막대는 같은 척도", "bar": 28, "source": "예시" },
+        { "value": "1.8ms", "label": "신규 평균 지연", "hint": "소수점도 유지돼요", "bar": 6, "source": "예시" }
+      ],
+      "notes": "카운트업과 비교 막대가 스텝마다 채워집니다."
+    },
+    {
+      "type": "bento",
+      "title": "핵심 효과 네 가지",
+      "cards": [
+        { "icon": "⚡", "title": "빠른 응답", "body": "검증을 엣지에서 처리해 왕복을 줄여요" },
+        { "icon": "🔒", "title": "안전한 전환", "body": "구/신 방식을 병행해 무중단으로 옮겨요" },
+        { "icon": "📉", "title": "비용 절감", "body": "DB 조회가 줄어 인스턴스를 줄일 수 있어요" },
+        { "icon": "🧪", "title": "검증 자동화", "body": "침투 시나리오를 CI 에서 매번 돌려요" }
+      ],
+      "notes": "카드가 시차를 두고 올라오고, 마우스를 올리면 글로우가 켜져요."
+    },
+    {
+      "type": "code",
+      "title": "토큰 검증은 세 단계로",
+      "file": "auth/verify.ts",
+      "lang": "ts",
+      "start_line": 1,
+      "code": "export async function verify(token: string) {\n  const cached = cache.get(token);\n  if (cached) return cached;\n\n  const claims = await jwt.verify(token, key);\n  if (claims.exp < Date.now() / 1000) throw new Expired();\n\n  cache.set(token, claims, TTL);\n  return claims;\n}",
+      "walk": [
+        { "lines": [2, 3], "note": "먼저 로컬 캐시를 확인해요" },
+        { "lines": [5, 6], "note": "캐시에 없으면 서명과 만료를 검증해요" },
+        { "lines": [8, 9], "note": "통과한 결과를 TTL 과 함께 캐시해요" }
+      ],
+      "notes": "→ 키마다 하이라이트가 이동하고 오른쪽 설명이 따라옵니다."
+    },
+    {
+      "type": "code",
+      "title": "리팩터링 전후를 한 화면에서",
+      "file": "auth/verify.ts",
+      "lang": "ts",
+      "magic": [
+        { "code": "export async function verify(token) {\n  const claims = await db.findSession(token);\n  if (!claims) throw new Unauthorized();\n  return claims;\n}", "note": "기존: 매 요청마다 DB 세션 조회" },
+        { "code": "export async function verify(token) {\n  const claims = await jwt.verify(token, key);\n  if (!claims) throw new Unauthorized();\n  return claims;\n}", "note": "조회 대신 서명 검증으로 교체" },
+        { "code": "export async function verify(token) {\n  const cached = cache.get(token);\n  if (cached) return cached;\n\n  const claims = await jwt.verify(token, key);\n  if (!claims) throw new Unauthorized();\n  cache.set(token, claims, TTL);\n  return claims;\n}", "note": "결과를 캐시해 반복 검증 비용 제거" }
+      ],
+      "notes": "→ 키를 누르면 바뀌지 않은 줄은 미끄러지듯 이동하고, 새 줄만 반짝이며 나타나요."
+    },
+    {
+      "type": "statement",
+      "kicker": "한 줄 요약",
+      "text": "세션을 **서버에서 꺼내** 토큰으로 옮겼어요",
+      "transition": "zoom",
+      "notes": "핵심 메시지 한 문장을 단어 단위로 띄웁니다."
+    },
+    {
+      "type": "quote",
+      "quote": "측정하지 않은 개선은 개선이 아니다.",
+      "by": "팀 원칙",
+      "transition": "slide-up",
+      "notes": "인용 레이아웃이에요."
+    },
+    {
+      "type": "timeline",
+      "title": "석 달 만에 전환을 끝냈어요",
+      "items": [
+        { "period": "2026.08", "title": "설계", "detail": "인증 방식 비교와 PoC" },
+        { "period": "2026.09", "title": "병행 운영", "detail": "구/신 방식을 동시에 검증" },
+        { "period": "2026.10", "title": "완전 전환", "detail": "레거시 세션 제거" }
+      ],
+      "notes": "기간별로 점이 채워지며 진행됩니다."
+    },
+    { "type": "end", "title": "감사합니다", "subtitle": "Q & A" }
+  ]
+}

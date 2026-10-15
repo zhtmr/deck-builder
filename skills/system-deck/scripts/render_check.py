@@ -53,7 +53,7 @@ def main():
                 """() => {
                 const s = document.querySelector('.slide.active'); const R = s.getBoundingClientRect();
                 const bad = [];
-                s.querySelectorAll('h1,h2,h3,li,p,.stat,.code,.col,.steps li').forEach(el => {
+                s.querySelectorAll('h1,h2,h3,li,p,.stat,.code,.col,.steps li,.term,.trow,.bcard,.tl-item').forEach(el => {
                   const r = el.getBoundingClientRect();
                   if (r.width === 0) return;
                   if (r.right > R.right + 2 || r.bottom > R.bottom + 2) bad.push((el.textContent||'').trim().slice(0,40));

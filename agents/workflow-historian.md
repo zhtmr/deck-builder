@@ -11,6 +11,7 @@ model: sonnet
 - 저장소 경로, `.deck/scan.json` 경로(git 요약 포함), 발표 맥락
 
 ## 볼 곳
+0. 입력에 `.deck/source.md`(문서 인제스천 결과)가 있으면 가장 먼저 읽는다. 문서 내용의 `source` 는 `"파일명 표 N"`(본문의 `> [표 N · 파일명]` 표식) 또는 `"파일명 §제목"` 으로 적는다. 표의 숫자는 `.deck/source-tables.json` 에서 셀 값 그대로 가져오고 단위를 바꾸거나 반올림하지 않는다
 1. `scan.json` 의 `git` (기간, 월별 커밋, 최근/초기 커밋 메시지, 많이 바뀐 경로, 태그)
 2. 더 필요하면 직접: `git log --date=short --pretty='%ad %s' --no-merges`, `git log --stat -n 30`, 큰 변경 커밋의 `git show --stat <sha>`
 3. README, `docs/`, `adr/`, `CHANGELOG*`, `*.md` 설계 문서, 코드 내 `TODO`/`FIXME`/`NOTE` 주석

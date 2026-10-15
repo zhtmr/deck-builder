@@ -19,14 +19,15 @@ html[data-theme="light"]{
 html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}
 body{display:grid;place-items:center}
 #stage{position:relative;width:1600px;height:900px;transform-origin:center center;flex:none}
-.slide{position:absolute;inset:0;padding:64px 88px 56px;visibility:hidden;opacity:0;transition:opacity .45s ease,visibility 0s .45s;
+.slide{position:absolute;inset:0;padding:64px 88px 56px;visibility:hidden;opacity:0;
+  transition:opacity .5s ease,transform .75s cubic-bezier(.22,1,.36,1),visibility 0s .75s;
   background:radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb,var(--accent) 9%, transparent), transparent 60%),
              linear-gradient(var(--bg),var(--bg2));overflow:hidden}
 .slide::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
   background-size:48px 48px;mask-image:radial-gradient(ellipse at 70% 40%,#000 0%,transparent 70%)}
-.slide.active{visibility:visible;opacity:1;transition:opacity .45s ease}
-.slide > *{position:relative}
+.slide.active{visibility:visible;opacity:1;transform:none;transition:opacity .5s ease,transform .75s cubic-bezier(.22,1,.36,1)}
+.slide > *{position:relative;z-index:1}
 h1,h2,h3{margin:0;letter-spacing:-.02em}
 h2{font-size:44px;font-weight:800;margin-bottom:34px}
 h2::before{content:"";display:inline-block;width:10px;height:34px;border-radius:3px;background:var(--accent);margin-right:18px;vertical-align:-4px}
@@ -60,8 +61,15 @@ body.show-notes #notes{display:block}
 .bul > li{padding:14px 0 14px 46px;position:relative;border-bottom:1px solid var(--line)}
 .bul > li::before{content:"";position:absolute;left:6px;top:30px;width:14px;height:14px;border-radius:4px;background:var(--accent);transform:rotate(45deg)}
 .bul ul{margin:8px 0 0;padding-left:26px;font-size:25px;color:var(--muted)}
-.frag{opacity:0;transform:translateY(14px);transition:opacity .4s,transform .4s}
+.frag{opacity:0;transform:translateY(var(--fy,18px));transition:opacity .45s ease,transform .7s cubic-bezier(.34,1.35,.64,1)}
 .frag.on,.all .frag{opacity:1;transform:none}
+/* 클릭 프리셋(Slidev v-click 의 fade/up/left/right/scale 대응): 슬라이드 fx 필드 또는 타입별 기본값 */
+.t-stats .frag,.t-bento .frag,[data-fx=scale] .frag{transform:scale(.88)}
+.t-terminal .frag,[data-fx=left] .frag{transform:translateX(-26px)}
+[data-fx=right] .frag{transform:translateX(26px)}
+[data-fx=fade] .frag{transform:none}
+[data-fx=up] .frag{transform:translateY(18px)}
+.frag.on,.all .frag,.t-stats .frag.on,.t-bento .frag.on,.t-terminal .frag.on,[data-fx] .frag.on{opacity:1;transform:none}
 .stats{display:grid;gap:28px;margin-top:40px}
 .stats.n1{grid-template-columns:1fr}.stats.n2{grid-template-columns:repeat(2,1fr)}.stats.n3{grid-template-columns:repeat(3,1fr)}
 .stats.n4,.stats.n5,.stats.n6{grid-template-columns:repeat(3,1fr)}.stats.n4{grid-template-columns:repeat(4,1fr)}
@@ -193,15 +201,199 @@ html[data-theme="toss"] .steps li.on .no{color:#fff}
 html[data-theme="toss"] .legend{color:#8b95a1}
 html[data-theme="toss"] #progress{height:4px}
 
-/* ---------- 정지 화면(스크린샷/인쇄) ---------- */
+/* ---------- stats: 카운트업 · 비교 막대 ---------- */
+.stat .sbar{height:10px;border-radius:6px;background:var(--line);margin-top:22px;overflow:hidden}
+.stat .sbar i{display:block;height:100%;width:0;background:var(--accent);border-radius:6px;transition:width 1s cubic-bezier(.2,.8,.2,1) .2s}
+.stat.on .sbar i{width:var(--w)}
+.stat .v{white-space:nowrap}
+.stat .v.long{font-size:56px}
+.stat .v .num{font-variant-numeric:tabular-nums}
+
+/* ---------- code walkthrough ---------- */
+.code .ln{transition:opacity .35s,background .35s}
+.code .ln.dim{opacity:.32}
+.code-pts li.walk{opacity:.35;transition:opacity .3s,background .3s;border-radius:12px;padding:16px 14px}
+.code-pts li.walk.done{opacity:.6}
+.code-pts li.walk.on{opacity:1;background:color-mix(in srgb,var(--accent) 12%,transparent)}
+
+/* ---------- terminal ---------- */
+.term{background:#0b0d12;border:1px solid #232a3a;border-radius:18px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.3);max-width:1424px}
+.tbar{display:flex;align-items:center;gap:9px;padding:14px 20px;background:#141824;border-bottom:1px solid #232a3a}
+.tbar i{width:13px;height:13px;border-radius:50%;background:#3a4256}
+.tbar i:nth-child(1){background:#ff5f57}.tbar i:nth-child(2){background:#febc2e}.tbar i:nth-child(3){background:#28c840}
+.tbar span{margin-left:14px;font:600 15px var(--mono);color:#8b97b3}
+.tbody{padding:26px 34px 30px;font-family:var(--mono);color:#d5def0}
+.tcmd{font-size:24px;margin-bottom:22px;min-height:36px}
+.tcmd::before{content:"$ ";color:#34d399}
+.tcmd .cmd::after{content:"▍";color:#8b97b3;animation:blink 1.1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.trow{display:grid;grid-template-columns:1fr 300px 82px 150px;align-items:center;gap:20px;padding:11px 0;font-size:21px}
+.trow .tlab{font-family:var(--font);font-weight:600;color:#e8edf7}
+.trow .trk{height:10px;border-radius:6px;background:#1c2233;overflow:hidden}
+.trow .trk i{display:block;height:100%;width:0;border-radius:6px;background:var(--sc);transition:width 1s cubic-bezier(.2,.8,.2,1) .15s}
+.trow.on .trk i{width:var(--w)}
+.tbadge{font-weight:800;font-size:17px;color:var(--sc);transform:scale(0);transition:transform .5s cubic-bezier(.34,1.56,.64,1) .8s}
+.trow.on .tbadge{transform:none}
+.trow .td{font-size:17px;color:#7d89a6;text-align:right}
+.trow.ok{--sc:#34d399}.trow.warn{--sc:#fbbf24}.trow.fail{--sc:#f87171}
+.tsum{margin-top:18px;padding:14px 22px;border-radius:12px;font:700 22px var(--font);background:color-mix(in srgb,#34d399 14%,transparent);color:#34d399;display:inline-block}
+.tsum.warn{background:color-mix(in srgb,#fbbf24 14%,transparent);color:#fbbf24}
+.tsum.fail{background:color-mix(in srgb,#f87171 14%,transparent);color:#f87171}
+
+/* ---------- bento ---------- */
+.bento{display:grid;gap:26px}
+.bento.n3{grid-template-columns:repeat(3,1fr)}.bento.n4{grid-template-columns:repeat(2,1fr)}.bento.n2{grid-template-columns:repeat(2,1fr)}
+.bcard{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:34px 36px;position:relative;overflow:hidden;
+  transition:opacity .4s,transform .4s,box-shadow .3s,border-color .3s}
+.bcard:hover{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 14px 40px color-mix(in srgb,var(--accent) 22%,transparent)}
+.bcard .ic{font-size:40px;line-height:1;margin-bottom:16px}
+.bcard h3{font-size:31px;font-weight:750;margin-bottom:12px}
+.bcard p{margin:0;font-size:23px;line-height:1.55;color:var(--muted)}
+.bento.n4 .bcard{padding:28px 36px}
+html[data-theme="toss"] .bcard{background:#f9fafb;border:0;border-radius:28px}
+
+/* ---------- timeline ---------- */
+.tl{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:20px;position:relative;margin-top:70px}
+.tl::before{content:"";position:absolute;left:0;right:0;top:15px;height:3px;background:var(--line)}
+.tl-item{position:relative;padding-top:50px}
+.tl-item::before{content:"";position:absolute;left:0;top:6px;width:20px;height:20px;border-radius:50%;background:var(--bg);border:3px solid var(--accent);
+  transition:background .3s}
+.tl-item.on::before{background:var(--accent)}
+.tl-item .per{font-size:21px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+.tl-item h3{font-size:28px;font-weight:750;margin:8px 0 10px}
+.tl-item p{margin:0;font-size:20px;line-height:1.55;color:var(--muted)}
+
+/* ---------- 슬라이드 전환 (방향 인식: 앞으로 가면 이전 장은 왼쪽/위로 빠진다) ---------- */
+.slide[data-tr=slide-left].before{transform:translateX(-7%)}  .slide[data-tr=slide-left].after{transform:translateX(7%)}
+.slide[data-tr=slide-up].before{transform:translateY(-7%)}    .slide[data-tr=slide-up].after{transform:translateY(7%)}
+.slide[data-tr=zoom].before{transform:scale(1.08)}            .slide[data-tr=zoom].after{transform:scale(.92)}
+.slide[data-tr=none],.slide[data-tr=none].active{transition:none}
+
+/* ---------- 단어 단위 등장 · 제목 입장 ---------- */
+.words .w{display:inline-block;opacity:0;transform:translateY(.45em)}
+.slide.active .words .w{animation:wordIn .8s cubic-bezier(.22,1,.36,1) calc(var(--i) * 75ms + .15s) forwards}
+@keyframes wordIn{to{opacity:1;transform:none}}
+.slide.active h2{animation:hIn .7s cubic-bezier(.22,1,.36,1) both}
+@keyframes hIn{from{opacity:0;transform:translateX(-22px)}to{opacity:1;transform:none}}
+.slide.active .eyebrow,.slide.active .sub{animation:hIn .8s cubic-bezier(.22,1,.36,1) .35s both}
+
+/* ---------- 배경 글로우가 천천히 흐른다 ---------- */
+.slide::after{content:"";z-index:0;position:absolute;width:900px;height:900px;left:-260px;top:-380px;border-radius:50%;pointer-events:none;
+  background:radial-gradient(circle,color-mix(in srgb,var(--accent) 15%,transparent),transparent 65%);filter:blur(24px);opacity:0}
+.slide.active::after{opacity:1;animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate(0,0) scale(1)}to{transform:translate(900px,420px) scale(1.25)}}
+html[data-theme="toss"] .slide::after{display:none}
+
+/* ---------- statement · quote ---------- */
+.t-statement,.t-quote{display:flex;flex-direction:column;justify-content:center;padding-left:140px;padding-right:140px}
+.kicker{font-size:22px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);margin-bottom:26px}
+.statement{font-size:84px;line-height:1.2;font-weight:850;letter-spacing:-.03em;margin:0}
+.t-quote blockquote{margin:0;font-size:58px;line-height:1.35;font-weight:700;letter-spacing:-.025em;position:relative;padding-left:70px}
+.t-quote blockquote::before{content:"“";position:absolute;left:-6px;top:-34px;font-size:150px;line-height:1;color:var(--accent);font-family:Georgia,serif}
+.t-quote .by{margin-top:34px;padding-left:70px;font-size:24px;color:var(--muted)}
+html[data-theme="toss"] .statement{font-weight:700;letter-spacing:-.04em}
+
+/* ---------- 코드 매직무브 ---------- */
+.code.big pre code{font-size:27px;line-height:1.65}
+.code.big .ln{padding-left:84px}
+.code.big .ln::before{width:62px}
+.code.big .file{font-size:17px}
+.code-wrap.with-pts{grid-template-columns:1fr 460px}
+.code-pts li.walk{font-size:25px}
+.code pre{position:relative}
+.code .ln.new{animation:lineIn .9s ease both}
+@keyframes lineIn{0%{opacity:0;background:color-mix(in srgb,var(--accent) 34%,transparent)}35%{opacity:1}100%{background:transparent}}
+.code .ln.gone{position:absolute;left:0;right:0;pointer-events:none;transition:opacity .35s ease;opacity:0}
+
+/* ---------- 오버뷰 (o 키) ---------- */
+#overview{position:fixed;inset:0;z-index:20;background:rgba(6,9,18,.92);backdrop-filter:blur(10px);display:none;overflow:auto;
+  padding:40px;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:24px;align-content:start}
+body.overview #overview{display:grid}
+#overview .th{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:border-color .2s,transform .3s cubic-bezier(.34,1.35,.64,1)}
+#overview .th:hover{transform:scale(1.03);border-color:var(--accent)}
+#overview .th.cur{border-color:var(--accent)}
+#overview .th .slide{position:absolute;left:0;top:0;width:1600px;height:900px;transform-origin:0 0;visibility:visible!important;opacity:1!important;transition:none!important}
+#overview .th .slide *{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
+#overview .th .slide::after{display:none}
+#overview .th b.no{position:absolute;left:10px;bottom:8px;z-index:3;font:700 14px var(--font);background:rgba(0,0,0,.65);color:#fff;padding:2px 9px;border-radius:99px}
+
+/* ---------- image: 스크린샷 + 단계별 하이라이트 ---------- */
+.shot{margin:0;position:relative;display:flex;flex-direction:column;align-items:center}
+.shot-in{position:relative;display:inline-block;max-width:100%;border-radius:18px;overflow:visible;
+  box-shadow:0 0 0 1px var(--line),0 40px 90px rgba(0,0,0,.45)}
+.shot-in img{display:block;max-width:1380px;max-height:620px;border-radius:18px;transition:filter .5s}
+.shot-in:has(.mark.on) img{filter:brightness(.55) saturate(.9)}
+.shot.cover .shot-in img{width:1380px;height:620px;object-fit:cover}
+.mark{position:absolute;border:3px solid var(--accent);border-radius:10px;box-shadow:0 0 0 9999px transparent,0 0 28px color-mix(in srgb,var(--accent) 55%,transparent);
+  background:color-mix(in srgb,var(--accent) 7%,transparent)}
+.mark.frag{transform:scale(1.06)}
+.mark.on:not(.cur){opacity:.4}
+.mark span{position:absolute;left:0;top:100%;margin-top:12px;white-space:nowrap;background:var(--accent);color:#04101f;font:700 22px var(--font);padding:7px 16px;border-radius:99px}
+.mark.up span{top:auto;bottom:100%;margin:0 0 12px}
+.shot figcaption{margin-top:22px;font-size:22px;color:var(--muted)}
+.slide.active .shot-in{animation:shotIn .9s cubic-bezier(.22,1,.36,1) both}
+@keyframes shotIn{from{opacity:0;transform:translateY(26px) scale(.965)}to{opacity:1;transform:none}}
+
+/* ---------- aurora 테마: 검은 배경 · 천천히 흐르는 블러 그라데이션 · 가벼운 큰 타이포 · 유리 카드 ---------- */
+html[data-theme="aurora"]{
+  --bg:#000; --bg2:#02040a; --panel:rgba(255,255,255,.035); --fg:#f4f6fb; --muted:#8d97ad; --edge:#3a465e; --line:rgba(255,255,255,.1);
+  --fy:46px;
+}
+html[data-theme="aurora"] .slide{background:#000;padding:76px 100px 60px}
+html[data-theme="aurora"] .slide::before{inset:-25%;mask-image:none;-webkit-mask-image:none;opacity:1;background-size:auto;
+  background-image:
+    radial-gradient(36% 40% at 20% 32%, color-mix(in srgb,var(--accent) 30%,transparent), transparent 70%),
+    radial-gradient(32% 38% at 74% 80%, rgba(45,212,191,.17), transparent 70%),
+    radial-gradient(28% 32% at 88% 16%, rgba(99,102,241,.17), transparent 70%)}
+html[data-theme="aurora"] .slide.active::before{animation:aurora 28s ease-in-out infinite alternate}
+@keyframes aurora{0%{transform:translate3d(0,0,0) scale(1) rotate(0)}100%{transform:translate3d(5%,-4%,0) scale(1.14) rotate(5deg)}}
+html[data-theme="aurora"] .slide::after{display:none}
+html[data-theme="aurora"] h2{font-size:58px;font-weight:500;letter-spacing:-.035em;margin-bottom:46px}
+html[data-theme="aurora"] h2::before{display:none}
+html[data-theme="aurora"] .eyebrow{letter-spacing:.02em;text-transform:none;font-size:24px;font-weight:500;color:var(--muted)}
+html[data-theme="aurora"] .t-title h1{font-size:88px;font-weight:500;letter-spacing:-.045em;line-height:1.1}
+html[data-theme="aurora"] .sub{color:var(--muted);font-weight:400}
+html[data-theme="aurora"] .sec h1{font-weight:500;letter-spacing:-.04em}
+html[data-theme="aurora"] .sec-no{-webkit-text-stroke:0;color:var(--accent);font-size:28px;font-weight:600;margin-bottom:22px}
+html[data-theme="aurora"] .statement{font-weight:500}
+html[data-theme="aurora"] .t-quote blockquote{font-weight:500}
+html[data-theme="aurora"] b{color:var(--accent);font-weight:600}
+html[data-theme="aurora"] .bul > li{border-bottom:1px solid rgba(255,255,255,.08)}
+html[data-theme="aurora"] .bul > li::before{border-radius:50%;transform:none;width:9px;height:9px;top:36px;left:10px}
+html[data-theme="aurora"] .stat,html[data-theme="aurora"] .col,html[data-theme="aurora"] .bcard{
+  background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.11);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 30px 80px rgba(0,0,0,.4)}
+html[data-theme="aurora"] .stat .v{font-weight:600}
+html[data-theme="aurora"] .code{background:rgba(12,16,26,.74);border:1px solid rgba(255,255,255,.13);
+  box-shadow:0 0 0 7px rgba(255,255,255,.028),0 40px 100px color-mix(in srgb,var(--accent) 17%,transparent)}
+html[data-theme="aurora"] .code .file{background:transparent;border-color:rgba(255,255,255,.08)}
+html[data-theme="aurora"] .term{box-shadow:0 0 0 7px rgba(255,255,255,.028),0 40px 100px color-mix(in srgb,var(--accent) 14%,transparent)}
+html[data-theme="aurora"] .legend{color:var(--muted)}
+html[data-theme="aurora"] .e-lab rect{fill:#000}
+html[data-theme="aurora"] .tl::before{background:rgba(255,255,255,.12)}
+html[data-theme="aurora"] .tl-item::before{background:#000}
+html[data-theme="aurora"] .tl-item.on::before{background:var(--accent)}
+
+/* ---------- 정지 화면(스크린샷/인쇄) · 동작 줄이기 ---------- */
+@media (prefers-reduced-motion: reduce){
+  .slide *, .slide{animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}
+  .tcmd .cmd::after{animation:none}
+}
 body.still .slide *, body.still .slide{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
 @media print{
   @page{size:1600px 900px;margin:0}
   html,body{overflow:visible;height:auto;display:block;background:none}
   #stage{transform:none!important;width:1600px;height:auto}
-  .slide{position:relative;visibility:visible;opacity:1;width:1600px;height:900px;page-break-after:always;break-after:page}
+  .slide{position:relative;visibility:visible;opacity:1;transform:none!important;width:1600px;height:900px;page-break-after:always;break-after:page}
+  .slide::after{display:none}
+  .words .w{opacity:1!important;transform:none!important}
+  #overview{display:none!important}
   .slide *{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
   .frag{opacity:1;transform:none}
+  .stat .sbar i,.trow .trk i{width:var(--w)!important}
+  .tbadge{transform:none!important}
+  .code .ln.dim{opacity:1}.code-pts li.walk{opacity:1}
+  .tcmd .cmd::after{display:none}
   .node{opacity:1}.e-base{opacity:1;stroke-dashoffset:0}.e-lab{opacity:1}
   #progress,#notes,.packets{display:none}
 }
@@ -213,6 +405,7 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
 </div>
 <div id="progress"></div>
 <div id="notes"></div>
+<div id="overview"></div>
 <script>
 (() => {
   const stage = document.getElementById('stage');
@@ -353,11 +546,137 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
   }
   function stopAuto(){ if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; } }
 
+  // ---------- 카운트업 · 타이핑 · 코드 워크스루 ----------
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const fmtNum = (el, v) => {
+    const dec = +el.dataset.dec || 0, s = v.toFixed(dec);
+    return el.dataset.comma === '1' ? Number(s).toLocaleString('en-US', {minimumFractionDigits: dec, maximumFractionDigits: dec}) : s;
+  };
+  function countUp(el, still){
+    cancelAnimationFrame(el._raf);
+    const to = +el.dataset.to;
+    if (still){ el.textContent = fmtNum(el, to); return; }
+    const t0 = performance.now(), dur = 1100;
+    const f = now => {
+      const t = Math.min(1, (now - t0) / dur);
+      el.textContent = fmtNum(el, to * (1 - Math.pow(1 - t, 4)));   // easeOutQuart: 빠르게 올라가 목표값에 안착
+      if (t < 1) el._raf = requestAnimationFrame(f);
+    };
+    el._raf = requestAnimationFrame(f);
+  }
+  function applyCounts(s, still){
+    s.querySelectorAll('.stat .num').forEach(el => {
+      const on = el.closest('.stat').classList.contains('on');
+      if (on && !el.dataset.shown){ el.dataset.shown = '1'; countUp(el, still); }
+      else if (!on && el.dataset.shown){ delete el.dataset.shown; cancelAnimationFrame(el._raf); el.textContent = fmtNum(el, 0); }
+    });
+  }
+  function typeCmd(s, still){
+    const c = s.querySelector('.cmd'); if (!c) return;
+    const full = c.dataset.full;
+    clearInterval(c._iv);
+    if (still){ c.textContent = full; s.dataset.typed = '1'; return; }
+    if (s.dataset.typed){ c.textContent = full; return; }
+    s.dataset.typed = '1'; c.textContent = ''; let i = 0;
+    c._iv = setInterval(() => { c.textContent = full.slice(0, ++i); if (i >= full.length) clearInterval(c._iv); }, 34);
+  }
+  function applyWalk(s, W, k){
+    const lines = [...s.querySelectorAll('.code .ln')];
+    const [a, b] = k > 0 ? W[k-1] : [0, 0];
+    lines.forEach(l => {
+      const n = +l.dataset.n, inr = k > 0 && n >= a && n <= b;
+      l.classList.toggle('hl', inr); l.classList.toggle('dim', k > 0 && !inr);
+    });
+    s.querySelectorAll('.code-pts li').forEach((li, j) => {
+      li.classList.toggle('done', j < k - 1); li.classList.toggle('on', j === k - 1);
+    });
+  }
+
+  // ---------- 코드 매직무브: 줄 단위 LCS 로 유지/추가/삭제를 가려 FLIP 모핑 ----------
+  function lcsPairs(a, b){
+    const n = a.length, m = b.length, d = Array.from({length: n+1}, () => new Array(m+1).fill(0));
+    for (let i = n-1; i >= 0; i--) for (let j = m-1; j >= 0; j--)
+      d[i][j] = a[i] === b[j] ? d[i+1][j+1] + 1 : Math.max(d[i+1][j], d[i][j+1]);
+    const pairs = []; let i = 0, j = 0;
+    while (i < n && j < m){
+      if (a[i] === b[j]){ pairs.push([i, j]); i++; j++; }
+      else if (d[i+1][j] >= d[i][j+1]) i++; else j++;
+    }
+    return pairs;
+  }
+  function setLine(el, text, lang){
+    el.dataset.t = text;
+    if (window.hljs && lang && hljs.getLanguage(lang)) el.innerHTML = hljs.highlight(text || ' ', {language: lang, ignoreIllegals: true}).value;
+    else el.textContent = text || ' ';
+  }
+  function magicRender(s, k, still){
+    if (!still && s._mk === k) return;
+    const M = JSON.parse(s.dataset.magic), code = s.querySelector('.code code');
+    const lang = (code.className.match(/language-(\S+)/) || [])[1];
+    const next = M[k].code.replace(/\n$/, '').split('\n');
+    code.querySelectorAll('.gone').forEach(e => e.remove());
+    const old = [...code.querySelectorAll('.ln')];
+    const animate = !still && s._mk !== undefined && old.length > 0;
+    const tops = old.map(e => e.offsetTop);
+    const pairs = animate ? lcsPairs(old.map(e => e.dataset.t), next) : [];
+    const keep = new Map(pairs.map(([i, j]) => [j, i])), used = new Set(pairs.map(p => p[0]));
+    const gone = animate ? old.filter((_, i) => !used.has(i)) : [];
+    if (!animate) old.forEach(e => e.remove());
+    gone.forEach(e => { e.style.top = tops[old.indexOf(e)] + 'px'; e.style.opacity = 1; e.classList.add('gone'); });
+    const frag = document.createDocumentFragment(), moved = [];
+    next.forEach((t, j) => {
+      let el;
+      if (keep.has(j)){ el = old[keep.get(j)]; el.classList.remove('new', 'hl', 'dim'); moved.push([el, tops[keep.get(j)]]); }
+      else { el = document.createElement('span'); el.className = 'ln' + (animate ? ' new' : ''); setLine(el, t, lang); }
+      el.dataset.n = (+s.dataset.start || 1) + j;
+      frag.appendChild(el);
+    });
+    code.appendChild(frag);
+    moved.forEach(([el, from]) => {
+      const dy = from - el.offsetTop; if (!dy) return;
+      el.style.transition = 'none'; el.style.transform = `translateY(${dy}px)`;
+    });
+    void code.offsetWidth;
+    moved.forEach(([el]) => {
+      if (!el.style.transform) return;
+      el.style.transition = 'transform .65s cubic-bezier(.22,1,.36,1)'; el.style.transform = '';
+      setTimeout(() => { el.style.transition = ''; }, 700);
+    });
+    requestAnimationFrame(() => gone.forEach(e => { e.style.opacity = ''; setTimeout(() => e.remove(), 400); }));
+    s._mk = k;
+    s.querySelectorAll('.code-pts li').forEach((li, j) => { li.classList.toggle('done', j < k); li.classList.toggle('on', j === k); });
+  }
+
+  // ---------- 오버뷰 (o) ----------
+  const ov = document.getElementById('overview');
+  function openOverview(){
+    ov.innerHTML = '';
+    slides.forEach((s, i) => {
+      const th = document.createElement('div'); th.className = 'th' + (i === cur ? ' cur' : '');
+      const c = s.cloneNode(true); c.classList.remove('before', 'after'); c.classList.add('active');
+      c.querySelectorAll('.frag').forEach(f => f.classList.add('on'));
+      c.querySelectorAll('.stat .num').forEach(el => { el.textContent = fmtNum(el, +el.dataset.to); });
+      c.querySelectorAll('.cmd').forEach(x => { x.textContent = x.dataset.full; });
+      const no = document.createElement('b'); no.className = 'no'; no.textContent = i + 1;
+      th.append(c, no); ov.appendChild(th);
+      th.addEventListener('click', e => { e.stopPropagation(); closeOverview(); go(i, 0); });
+    });
+    document.body.classList.add('overview');
+    ov.querySelectorAll('.th').forEach(th => { th.firstChild.style.transform = `scale(${th.clientWidth / 1600})`; });
+    const c = ov.querySelector('.th.cur'); if (c) c.scrollIntoView({block: 'center'});
+  }
+  function closeOverview(){ document.body.classList.remove('overview'); ov.innerHTML = ''; }
+
   // ---------- 렌더 ----------
   function render(still){
-    slides.forEach((s,i) => s.classList.toggle('active', i === cur));
+    still = still || reduced;
+    slides.forEach((s,i) => { s.classList.toggle('active', i === cur); s.classList.toggle('before', i < cur); s.classList.toggle('after', i > cur); });
     const s = slides[cur];
     s.querySelectorAll('.frag').forEach((f,i) => f.classList.toggle('on', i < step));
+    if (s.dataset.magic) magicRender(s, step, still);
+    s.querySelectorAll('.mark').forEach((m, j) => m.classList.toggle('cur', j === step - 1));
+    applyCounts(s, still); typeCmd(s, still);
+    if (s.dataset.walk) applyWalk(s, JSON.parse(s.dataset.walk), step);
     stopAuto(); clearPackets();
     if (s.dataset.flow) applyFlow(s, JSON.parse(s.dataset.flow), step, {still});
     else if (s.dataset.autoflow && !still) startAuto(s);
@@ -370,7 +689,7 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
 
   function go(i, k=0, still=false){
     i = Math.max(0, Math.min(slides.length-1, i));
-    if (i !== cur) restart(slides[i]);
+    if (i !== cur){ restart(slides[i]); delete slides[i].dataset.typed; }
     cur = i; step = Math.max(0, Math.min(+slides[i].dataset.steps || 0, k));
     render(still);
   }
@@ -383,19 +702,28 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
   }
 
   addEventListener('keydown', e => {
+    if (document.body.classList.contains('overview')){
+      if (e.key === 'o' || e.key === 'Escape') closeOverview();
+      return;
+    }
+    if (e.key === 'o'){ openOverview(); return; }
     if (['ArrowRight','ArrowDown',' ','PageDown','Enter'].includes(e.key)){ e.preventDefault(); next(); }
     else if (['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){ e.preventDefault(); prev(); }
     else if (e.key === 'Home') go(0); else if (e.key === 'End') go(slides.length-1);
     else if (e.key === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
     else if (e.key === 's') document.body.classList.toggle('show-notes');
-    else if (e.key === 't'){ const T = ['dark','light','toss'], h = document.documentElement; h.dataset.theme = T[(T.indexOf(h.dataset.theme)+1) % T.length]; }
+    else if (e.key === 't'){ const T = ['aurora','dark','light','toss'], h = document.documentElement; h.dataset.theme = T[(T.indexOf(h.dataset.theme)+1) % T.length]; }
   });
-  addEventListener('click', e => { if (e.target.closest('a')) return; (e.clientX < innerWidth/3 ? prev : next)(); });
+  addEventListener('click', e => { if (e.target.closest('a') || document.body.classList.contains('overview')) return; (e.clientX < innerWidth/3 ? prev : next)(); });
   let tx = null;
   addEventListener('touchstart', e => tx = e.touches[0].clientX, {passive:true});
   addEventListener('touchend', e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; tx = null;
     if (Math.abs(dx) > 40) (dx < 0 ? next : prev)(); }, {passive:true});
-  addEventListener('beforeprint', () => slides.forEach(s => { if (s.dataset.flow){ const q = JSON.parse(s.dataset.flow); applyFlow(s, q, q.length, {still:true}); } }));
+  addEventListener('beforeprint', () => slides.forEach(s => {
+    s.querySelectorAll('.stat .num').forEach(el => { el.dataset.shown = '1'; countUp(el, true); });
+    s.querySelectorAll('.cmd').forEach(c => { c.textContent = c.dataset.full; });
+    if (s.dataset.magic) magicRender(s, JSON.parse(s.dataset.magic).length - 1, true);
+    if (s.dataset.flow){ const q = JSON.parse(s.dataset.flow); applyFlow(s, q, q.length, {still:true}); } }));
 
   // ---------- 코드 하이라이트 (온라인일 때만) ----------
   function highlight(){

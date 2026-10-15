@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import html
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -38,7 +39,36 @@ KINDS = {
     "external": ("#94a3b8", "EXTERNAL", 5),
 }
 
-SLIDE_TYPES = {"title", "section", "bullets", "topology", "flow", "code", "stats", "split", "end"}
+# type: (필수 필드, 선택 필드). 공통 필드(type, id, title, notes)는 모든 타입에 허용.
+SLIDE_FIELDS: dict[str, tuple[set, set]] = {
+    "title":    (set(), {"subtitle"}),
+    "section":  ({"title"}, {"no", "subtitle"}),
+    "bullets":  ({"bullets"}, {"reveal"}),
+    "topology": (set(), {"flow", "focus", "nodes", "caption"}),
+    "flow":     ({"flow"}, {"nodes", "description"}),
+    "code":     (set(), {"code", "file", "lang", "start_line", "highlight", "points", "walk", "magic"}),
+    "image":    ({"src"}, {"alt", "caption", "marks", "fit"}),
+    "statement": ({"text"}, {"kicker", "subtitle"}),
+    "quote":    ({"quote"}, {"by"}),
+    "split":    ({"left", "right"}, set()),
+    "stats":    ({"items"}, set()),
+    "terminal": ({"items"}, {"window_title", "command", "summary"}),
+    "bento":    ({"cards"}, set()),
+    "timeline": ({"items"}, set()),
+    "end":      (set(), {"subtitle"}),
+}
+SLIDE_TYPES = set(SLIDE_FIELDS)
+COMMON_FIELDS = {"type", "id", "title", "notes", "transition", "fx"}
+TRANSITIONS = {"slide-left", "slide-up", "zoom", "fade", "none"}   # 슬라이드 간 전환
+FX = {"up", "left", "right", "scale", "fade"}                      # 스텝(클릭) 등장 프리셋
+STATUS = {"OK": "ok", "WARN": "warn", "FAIL": "fail"}
+THEMES = ("aurora", "dark", "light", "toss")
+ACCENTS = {"aurora": "#8ab4ff", "dark": "#7dd3fc", "light": "#2563eb", "toss": "#3182f6"}
+MAX_INLINE_BYTES = 3 * 1024 * 1024    # 이미지 한 장을 HTML 에 내장하는 한계 (넘으면 경고)
+BASE_DIR = Path(".")                  # build() 가 deck.json 위치로 설정한다 (이미지 상대 경로 기준)
+
+# 텍스트 길이 한계 (공백 포함, 마크업 제외). 넘으면 린트 경고.
+LIMITS = {"title": 28, "title_slide": 40, "bullet": 45, "card_body": 45, "detail": 45, "label": 40}
 
 
 class DeckError(Exception):
@@ -74,6 +104,8 @@ def validate(model: dict, deck: dict) -> list[str]:
         for k in ("from", "to"):
             if e.get(k) not in nid:
                 errs.append(f"edge '{e['id']}': {k}='{e.get(k)}' 노드가 없음")
+    if deck.get("transition") and deck["transition"] not in TRANSITIONS:
+        errs.append(f"deck.transition 은 {' | '.join(sorted(TRANSITIONS))}")
     fid = set()
     for f in flows:
         fid.add(f.get("id"))
@@ -94,7 +126,160 @@ def validate(model: dict, deck: dict) -> list[str]:
             for x in s.get(key, []) or []:
                 if x not in nid:
                     errs.append(f"slides[{i}]: {key} 에 없는 노드 '{x}'")
+        if t in SLIDE_FIELDS:
+            errs += validate_slide(i, s)
     return errs
+
+
+def validate_slide(i: int, s: dict) -> list[str]:
+    """타입별 필수 필드와 내용 규칙. (알 수 없는 필드는 lint 의 경고로 다룬다)"""
+    t = s["type"]
+    req, _ = SLIDE_FIELDS[t]
+    p = f"slides[{i}] ({t})"
+    errs = [f"{p}: 필수 필드 '{k}' 없음" for k in sorted(req) if not s.get(k)]
+    if s.get("transition") and s["transition"] not in TRANSITIONS:
+        errs.append(f"{p}: transition 은 {' | '.join(sorted(TRANSITIONS))}")
+    if s.get("fx") and s["fx"] not in FX:
+        errs.append(f"{p}: fx 는 {' | '.join(sorted(FX))}")
+
+    def items(key, lo, hi):
+        v = s.get(key)
+        if not isinstance(v, list):
+            return []
+        if not lo <= len(v) <= hi:
+            errs.append(f"{p}: {key} 는 {lo}~{hi}개여야 합니다 (현재 {len(v)})")
+        for j, x in enumerate(v):
+            if not isinstance(x, dict):
+                errs.append(f"{p}: {key}[{j}] 는 객체여야 합니다")
+        return [x for x in v if isinstance(x, dict)]
+
+    if t == "stats":
+        for j, x in enumerate(items("items", 1, 6)):
+            if x.get("value") in (None, ""):
+                errs.append(f"{p}: items[{j}].value 없음")
+            if "bar" in x and not (isinstance(x["bar"], (int, float)) and 0 <= x["bar"] <= 100):
+                errs.append(f"{p}: items[{j}].bar 는 0~100 숫자")
+    elif t == "terminal":
+        for j, x in enumerate(items("items", 1, 7)):
+            if not x.get("label"):
+                errs.append(f"{p}: items[{j}].label 없음")
+            if str(x.get("status", "OK")).upper() not in STATUS:
+                errs.append(f"{p}: items[{j}].status 는 OK | WARN | FAIL")
+            pr = x.get("progress", 100)
+            if not (isinstance(pr, (int, float)) and 0 <= pr <= 100):
+                errs.append(f"{p}: items[{j}].progress 는 0~100 숫자")
+    elif t == "bento":
+        for j, x in enumerate(items("cards", 2, 4)):
+            if not x.get("title"):
+                errs.append(f"{p}: cards[{j}].title 없음")
+    elif t == "timeline":
+        for j, x in enumerate(items("items", 2, 6)):
+            if not (x.get("period") and x.get("title")):
+                errs.append(f"{p}: items[{j}] 에 period 와 title 이 필요합니다")
+    elif t == "image":
+        for j, m in enumerate(s.get("marks") or []):
+            b = m.get("box") if isinstance(m, dict) else None
+            ok = (isinstance(b, list) and len(b) == 4 and all(isinstance(v, (int, float)) for v in b)
+                  and 0 <= b[0] and 0 <= b[1] and b[2] > 0 and b[3] > 0 and b[0] + b[2] <= 100 and b[1] + b[3] <= 100)
+            if not ok:
+                errs.append(f"{p}: marks[{j}].box 는 이미지 대비 % 로 [x, y, w, h] (x+w, y+h ≤ 100)")
+        if s.get("fit") not in (None, "contain", "cover"):
+            errs.append(f"{p}: fit 은 contain | cover")
+    elif t == "code":
+        magic = s.get("magic")
+        if not s.get("code") and not magic:
+            errs.append(f"{p}: code 또는 magic 중 하나가 필요합니다")
+        if magic:
+            if s.get("code") or s.get("walk"):
+                errs.append(f"{p}: magic 은 code/walk 와 함께 쓸 수 없습니다")
+            if not (isinstance(magic, list) and 2 <= len(magic) <= 8):
+                errs.append(f"{p}: magic 은 코드 버전 2~8개 목록")
+            else:
+                for j, v in enumerate(magic):
+                    if not (isinstance(v, dict) and v.get("code")):
+                        errs.append(f"{p}: magic[{j}].code 없음")
+            return errs
+        start = int(s.get("start_line", 1))
+        end = start + len(str(s.get("code", "")).rstrip("\n").split("\n")) - 1
+        for j, w in enumerate(s.get("walk") or []):
+            a, b = walk_range(w)
+            if a is None or not (start <= a <= b <= end):
+                errs.append(f"{p}: walk[{j}].lines 는 코드 줄 번호 범위({start}~{end}) 안의 [시작, 끝]")
+    return errs
+
+
+def walk_range(w) -> tuple:
+    ln = w.get("lines") if isinstance(w, dict) else None
+    if isinstance(ln, int):
+        return ln, ln
+    if isinstance(ln, list) and len(ln) == 2 and all(isinstance(v, int) for v in ln):
+        return ln[0], ln[1]
+    return None, None
+
+
+# ----------------------------------------------------------------------------
+# 린트 (경고): 길이, 강조 남용, 근거 누락, 오타 필드
+# ----------------------------------------------------------------------------
+def plain(s) -> str:
+    return re.sub(r"\*\*|`", "", str(s or ""))
+
+
+def lint(deck: dict) -> list[str]:
+    w: list[str] = []
+    for i, s in enumerate(deck.get("slides", [])):
+        t = s.get("type")
+        if t not in SLIDE_FIELDS:
+            continue
+        p = f"slides[{i}] ({t})"
+        req, opt = SLIDE_FIELDS[t]
+        for k in s:
+            if k not in req | opt | COMMON_FIELDS:
+                w.append(f"{p}: 알 수 없는 필드 '{k}' (오타이거나 무시됨)")
+
+        def long(text, limit, where):
+            if len(plain(text)) > limit:
+                w.append(f"{p}: {where} {len(plain(text))}자 > {limit}자: \"{plain(text)[:24]}…\"")
+
+        long(s.get("title"), LIMITS["title_slide"] if t == "title" else LIMITS["title"], "제목")
+        for b in s.get("bullets") or []:
+            long(b.get("text") if isinstance(b, dict) else b, LIMITS["bullet"], "불릿")
+        for c in s.get("cards") or []:
+            long(c.get("title"), LIMITS["label"], "카드 제목")
+            long(c.get("body"), LIMITS["card_body"], "카드 본문")
+        for x in s.get("items") or []:
+            if not isinstance(x, dict):
+                continue
+            if t == "timeline":
+                long(x.get("title"), LIMITS["label"], "타임라인 제목")
+                long(x.get("detail"), LIMITS["detail"], "타임라인 설명")
+            elif t == "stats":
+                long(x.get("hint"), LIMITS["detail"], "지표 설명")
+                if not x.get("source"):
+                    w.append(f"{p}: 지표 '{plain(x.get('label'))[:16]}' 에 source 없음 (근거 없는 수치는 만들지 않는다)")
+            elif t == "terminal":
+                long(x.get("label"), LIMITS["label"], "항목")
+                if not x.get("source"):
+                    w.append(f"{p}: 항목 '{plain(x.get('label'))[:16]}' 에 source 없음 (실제로 확인된 상태만 [OK] 로 표시)")
+        if t == "image":
+            long(s.get("caption"), LIMITS["detail"], "캡션")
+            if not s.get("alt"):
+                w.append(f"{p}: alt(이미지 설명) 없음")
+            for m in s.get("marks") or []:
+                if isinstance(m, dict):
+                    long(m.get("note"), 20, "하이라이트 라벨")
+        if t == "code":
+            for v in ([s.get("code", "")] + [m.get("code", "") for m in (s.get("magic") or []) if isinstance(m, dict)]):
+                if len(str(v).rstrip("\n").split("\n")) > 20:
+                    w.append(f"{p}: 코드가 20줄을 넘습니다")
+                    break
+        blob = json.dumps({k: v for k, v in s.items() if k != "notes"}, ensure_ascii=False)
+        if blob.count("**") > 4:
+            w.append(f"{p}: 강조(**)가 {blob.count('**') // 2}곳 — 슬라이드당 1~2곳 권장")
+        if "[확인 필요" in blob or "[확인필요" in blob:
+            w.append(f"{p}: [확인 필요] 자리표시가 남아 있음")
+        if t not in ("section", "end") and not s.get("notes"):
+            w.append(f"{p}: 발표자 노트(notes) 없음")
+    return w
 
 
 # ----------------------------------------------------------------------------
@@ -328,10 +513,73 @@ def topology_svg(model: dict, uid: str, W: int, H: int, only: list[str] | None =
 # ----------------------------------------------------------------------------
 # 슬라이드 렌더링
 # ----------------------------------------------------------------------------
+_COUNT = re.compile(r"^(?P<pre>[^\d]*?)(?P<num>\d[\d,]*(?:\.\d+)?)(?P<suf>.*)$", re.S)
+
+
+def count_html(value, enabled=True) -> str:
+    """'1,600,000 req/s' 같은 값에서 숫자 부분만 카운트업 대상으로 감싼다. 날짜·범위처럼 숫자가 여럿이면 그대로 둔다."""
+    text = str(value if value is not None else "")
+    m = _COUNT.match(text.strip())
+    if not enabled or not m or re.search(r"\d", m["suf"]) or re.search(r"\d", m["pre"]):
+        return esc(text)
+    num = m["num"]
+    dec = len(num.split(".")[1]) if "." in num else 0
+    to = float(num.replace(",", ""))
+    return (f'{esc(m["pre"])}<span class="num" data-to="{to}" data-dec="{dec}" '
+            f'data-comma="{1 if "," in num else 0}">{esc(num)}</span>{esc(m["suf"])}')
+
+
+def image_src(src: str) -> str:
+    """원격 URL·data URI 는 그대로, 로컬 파일은 base64 로 내장해 단일 HTML 을 유지한다."""
+    if re.match(r"^(https?:|data:)", src):
+        return src
+    import base64
+    import mimetypes
+    f = (BASE_DIR / src)
+    mime = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
+    return f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode("ascii")
+
+
+def check_assets(deck: dict, base: Path) -> tuple[list[str], list[str]]:
+    errs, warns = [], []
+    for i, s in enumerate(deck.get("slides", [])):
+        src = s.get("src") if s.get("type") == "image" else None
+        if not src or re.match(r"^(https?:|data:)", str(src)):
+            continue
+        f = base / src
+        if not f.is_file():
+            errs.append(f"slides[{i}] (image): 파일 없음 '{src}' (deck.json 기준 상대 경로)")
+        elif f.stat().st_size > MAX_INLINE_BYTES:
+            warns.append(f"slides[{i}] (image): '{src}' {f.stat().st_size // 1024}KB — HTML 이 무거워집니다. 줄여서 쓰세요")
+    return errs, warns
+
+
+def words(h: str) -> str:
+    """이미 이스케이프된 인라인 HTML 의 텍스트를 단어 단위 <span class=w> 로 감싼다 (태그는 그대로 통과)."""
+    n = 0
+    out = []
+    for part in re.split(r"(<[^>]+>)", h):
+        if part.startswith("<"):
+            out.append(part)
+            continue
+        for tok in re.split(r"(\s+)", part):
+            if not tok:
+                continue
+            if tok.isspace():
+                out.append(tok)
+            else:
+                out.append(f'<span class="w" style="--i:{n}">{tok}</span>')
+                n += 1
+    return "".join(out)
+
+
+def bar_style(x: dict) -> str:
+    return f' style="--w:{x["bar"]}%"' if "bar" in x else ""
+
+
 def md_inline(s: str) -> str:
     """**굵게**, `코드` 정도만 지원하는 최소 인라인 마크업."""
     out = esc(s)
-    import re
     out = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", out)
     out = re.sub(r"`(.+?)`", r"<code>\1</code>", out)
     return out
@@ -351,18 +599,25 @@ def slide_html(i: int, s: dict, model: dict, deck: dict) -> tuple[str, int]:
         sysname = model.get("system", {}).get("name", "")
         body = (
             f'<div class="title-wrap"><div class="eyebrow">{esc(deck.get("eyebrow", sysname))}</div>'
-            f'<h1>{md_inline(s.get("title") or deck.get("title", ""))}</h1>'
+            f'<h1 class="words">{words(md_inline(s.get("title") or deck.get("title", "")))}</h1>'
             f'<p class="sub">{md_inline(s.get("subtitle") or deck.get("subtitle", ""))}</p>'
             f'<div class="meta">{esc(deck.get("author", ""))}<span>{esc(deck.get("date", ""))}</span></div></div>'
             f'<div class="title-bg">{topology_svg(model, uid, 1100, 760)}</div>'
         )
         data = ' data-ambient="1"'
     elif t == "section":
-        body = (f'<div class="sec"><div class="sec-no">{esc(s.get("no", ""))}</div><h1>{title}</h1>'
+        body = (f'<div class="sec"><div class="sec-no">{esc(s.get("no", ""))}</div><h1 class="words">{words(title)}</h1>'
                 f'<p class="sub">{md_inline(s.get("subtitle", ""))}</p></div>')
     elif t == "end":
-        body = (f'<div class="sec end"><h1>{title or "감사합니다"}</h1>'
+        body = (f'<div class="sec end"><h1 class="words">{words(title or "감사합니다")}</h1>'
                 f'<p class="sub">{md_inline(s.get("subtitle", "Q & A"))}</p></div>')
+    elif t == "statement":
+        kick = f'<div class="kicker">{esc(s["kicker"])}</div>' if s.get("kicker") else ""
+        sub = f'<p class="sub">{md_inline(s["subtitle"])}</p>' if s.get("subtitle") else ""
+        body = f'{kick}<p class="statement words">{words(md_inline(s.get("text", "")))}</p>{sub}'
+    elif t == "quote":
+        by = f'<div class="by">{md_inline(s["by"])}</div>' if s.get("by") else ""
+        body = f'<blockquote class="words">{words(md_inline(s.get("quote", "")))}</blockquote>{by}'
     elif t == "bullets":
         items = s.get("bullets", [])
         reveal = s.get("reveal", True)
@@ -379,31 +634,98 @@ def slide_html(i: int, s: dict, model: dict, deck: dict) -> tuple[str, int]:
     elif t == "stats":
         items = s.get("items", [])
         cards = "".join(
-            f'<div class="stat frag"><div class="v">{esc(x.get("value"))}</div>'
+            f'<div class="stat frag"{bar_style(x)}><div class="v{" long" if len(str(x.get("value", ""))) > 7 else ""}">{count_html(x.get("value"), x.get("count", True))}</div>'
             f'<div class="l">{md_inline(x.get("label", ""))}</div>'
-            f'<div class="h">{md_inline(x.get("hint", ""))}</div></div>' for x in items
+            f'<div class="h">{md_inline(x.get("hint", ""))}</div>'
+            f'{"<div class=sbar><i></i></div>" if "bar" in x else ""}</div>' for x in items
         )
         steps = len(items)
         body = f'<h2>{title}</h2><div class="stats n{len(items)}">{cards}</div>'
     elif t == "code":
-        code = s.get("code", "")
+        magic = s.get("magic") or []
+        code = magic[0]["code"] if magic else s.get("code", "")
         hl = set(s.get("highlight", []) or [])
         start = int(s.get("start_line", 1))
         lines = code.rstrip("\n").split("\n")
         rows = "".join(
-            f'<span class="ln{" hl" if (start + k) in hl else ""}" data-n="{start + k}">{esc(l) or " "}</span>'
+            f'<span class="ln{" hl" if (start + k) in hl else ""}" data-n="{start + k}" data-t="{esc(l)}">{esc(l) or " "}</span>'
             for k, l in enumerate(lines)
         )
         side = ""
-        if s.get("points"):
+        walk = s.get("walk") or []
+        if magic:
+            side = '<ul class="code-pts">' + "".join(
+                f'<li class="walk">{md_inline(m.get("note", ""))}</li>' for m in magic) + "</ul>"
+            steps = len(magic) - 1
+            data += (f' data-magic="{esc(json.dumps([{"code": m["code"]} for m in magic], ensure_ascii=False))}"'
+                     f' data-start="{start}"')
+        elif walk:
+            rngs = [list(walk_range(w)) for w in walk]
+            side = '<ul class="code-pts">' + "".join(
+                f'<li class="walk">{md_inline(w.get("note", ""))}</li>' for w in walk) + "</ul>"
+            steps = len(walk)
+            data += f' data-walk="{esc(json.dumps(rngs))}"'
+        elif s.get("points"):
             side = '<ul class="code-pts">' + "".join(f"<li>{md_inline(p)}</li>" for p in s["points"]) + "</ul>"
+        longest = max(len(str(v).rstrip("\n").split("\n")) for v in ([code] + [m["code"] for m in magic]))
+        big = " big" if longest <= 12 else ""   # 짧은 코드는 크게 보여 준다
         body = (
             f'<h2>{title}</h2><div class="code-wrap{" with-pts" if side else ""}">'
-            f'<div class="code"><div class="file">{esc(s.get("file", ""))}</div>'
+            f'<div class="code{big}"><div class="file">{esc(s.get("file", ""))}</div>'
             f'<pre><code class="language-{esc(s.get("lang", "plaintext"))}">{rows}</code></pre></div>{side}</div>'
         )
+    elif t == "image":
+        marks = s.get("marks") or []
+        boxes = "".join(
+            f'<div class="mark frag{" up" if m["box"][1] + m["box"][3] > 72 else ""}" '
+            f'style="left:{m["box"][0]}%;top:{m["box"][1]}%;width:{m["box"][2]}%;height:{m["box"][3]}%">'
+            f'{"<span>" + md_inline(m["note"]) + "</span>" if m.get("note") else ""}</div>' for m in marks
+        )
+        steps = len(marks)
+        cap = f'<figcaption>{md_inline(s["caption"])}</figcaption>' if s.get("caption") else ""
+        body = (f'<h2>{title}</h2><figure class="shot{" cover" if s.get("fit") == "cover" else ""}"><div class="shot-in">'
+                f'<img src="{esc(image_src(s["src"]))}" alt="{esc(s.get("alt", ""))}">{boxes}</div>{cap}</figure>')
+    elif t == "terminal":
+        items = s.get("items", [])
+        rows = []
+        worst = "OK"
+        for x in items:
+            st = str(x.get("status", "OK")).upper()
+            worst = max(worst, st, key=["OK", "WARN", "FAIL"].index)
+            rows.append(
+                f'<div class="trow frag {STATUS[st]}" style="--w:{x.get("progress", 100)}%">'
+                f'<span class="tlab">{md_inline(x.get("label", ""))}</span><span class="trk"><i></i></span>'
+                f'<span class="tbadge">[{st}]</span><span class="td">{esc(x.get("detail", ""))}</span></div>'
+            )
+        summ = ""
+        if s.get("summary"):
+            summ = f'<div class="tsum frag {STATUS[worst]}">{md_inline(s["summary"])}</div>'
+        steps = len(items) + (1 if summ else 0)
+        cmd = s.get("command", "")
+        body = (
+            f'<h2>{title}</h2><div class="term"><div class="tbar"><i></i><i></i><i></i>'
+            f'<span>{esc(s.get("window_title", "terminal"))}</span></div>'
+            f'<div class="tbody"><div class="tcmd"><span class="cmd" data-full="{esc(cmd)}">{esc(cmd)}</span></div>'
+            f'{"".join(rows)}{summ}</div></div>'
+        )
+    elif t == "bento":
+        cards = s.get("cards", [])
+        html_cards = "".join(
+            f'<div class="bcard frag">{"<div class=ic>" + esc(c["icon"]) + "</div>" if c.get("icon") else ""}'
+            f'<h3>{md_inline(c.get("title", ""))}</h3><p>{md_inline(c.get("body", ""))}</p></div>' for c in cards
+        )
+        steps = len(cards)
+        body = f'<h2>{title}</h2><div class="bento n{len(cards)}">{html_cards}</div>'
+    elif t == "timeline":
+        items = s.get("items", [])
+        lis = "".join(
+            f'<div class="tl-item frag"><div class="per">{esc(x.get("period", ""))}</div>'
+            f'<h3>{md_inline(x.get("title", ""))}</h3><p>{md_inline(x.get("detail", ""))}</p></div>' for x in items
+        )
+        steps = len(items)
+        body = f'<h2>{title}</h2><div class="tl">{lis}</div>'
     elif t == "split":
-        left = "".join(f"<li>{md_inline(x)}</li>" for x in s.get("left", {}).get("bullets", []))
+        left ="".join(f"<li>{md_inline(x)}</li>" for x in s.get("left", {}).get("bullets", []))
         right = "".join(f"<li>{md_inline(x)}</li>" for x in s.get("right", {}).get("bullets", []))
         body = (
             f'<h2>{title}</h2><div class="split">'
@@ -447,8 +769,11 @@ def slide_html(i: int, s: dict, model: dict, deck: dict) -> tuple[str, int]:
             f'<aside class="steps"><p class="fdesc">{md_inline(s.get("description") or f.get("description", ""))}</p>'
             f'<ol>{"".join(lis)}</ol></aside></div>'
         )
+    tr = s.get("transition") or deck.get("transition", "slide-left")
+    if s.get("fx"):
+        data += f' data-fx="{esc(s["fx"])}"'
     return (
-        f'<section class="{cls}" data-steps="{steps}"{data}>{body}'
+        f'<section class="{cls}" data-steps="{steps}" data-tr="{esc(tr)}"{data}>{body}'
         f'<aside class="notes">{notes}</aside><div class="pg">{i+1}</div></section>',
         steps,
     )
@@ -472,33 +797,44 @@ def legend_html(model: dict, only=None) -> str:
 # ----------------------------------------------------------------------------
 # 페이지 조립
 # ----------------------------------------------------------------------------
-def build(deck_path: Path, out: Path | None, validate_only: bool) -> int:
-    deck = json.loads(deck_path.read_text(encoding="utf-8"))
+def build(deck_path: Path, out: Path | None, validate_only: bool, strict: bool = False) -> int:
+    deck = json.loads(deck_path.read_text(encoding="utf-8-sig"))   # 메모장 등이 붙이는 BOM 허용
     model_ref = deck.get("model")
     if isinstance(model_ref, str):
-        model = json.loads((deck_path.parent / model_ref).read_text(encoding="utf-8"))
+        model = json.loads((deck_path.parent / model_ref).read_text(encoding="utf-8-sig"))
     elif isinstance(model_ref, dict):
         model = model_ref
     else:
         raise DeckError("deck.json 에 model(경로 또는 객체)이 필요합니다")
     model.setdefault("flows", [])
 
+    global BASE_DIR
+    BASE_DIR = deck_path.parent
     errs = validate(model, deck)
+    asset_errs, asset_warns = check_assets(deck, BASE_DIR)
+    errs += asset_errs
     if errs:
         print("검증 실패:", file=sys.stderr)
         for e in errs:
             print("  -", e, file=sys.stderr)
         return 1
+    warns = lint(deck) + asset_warns
+    if warns:
+        print(f"경고 {len(warns)}건:", file=sys.stderr)
+        for w in warns:
+            print("  -", w, file=sys.stderr)
+        if strict:
+            return 1
     if validate_only:
         print(f"OK: 노드 {len(model['nodes'])}, 간선 {len(model['edges'])}, 플로우 {len(model['flows'])}, "
               f"슬라이드 {len(deck.get('slides', []))}")
         return 0
 
     slides = [slide_html(i, s, model, deck)[0] for i, s in enumerate(deck["slides"])]
-    theme = deck.get("theme", "dark")
-    if theme not in ("dark", "light", "toss"):
-        raise DeckError(f"theme 은 dark | light | toss 중 하나여야 합니다 (현재: {theme})")
-    accent = deck.get("accent") or {"toss": "#3182f6", "light": "#2563eb"}.get(theme, "#7dd3fc")
+    theme = deck.get("theme", "aurora")
+    if theme not in THEMES:
+        raise DeckError(f"theme 은 {' | '.join(THEMES)} 중 하나여야 합니다 (현재: {theme})")
+    accent = deck.get("accent") or ACCENTS[theme]
     tpl = (Path(__file__).parent / "deck_template.html").read_text(encoding="utf-8")
     page = (
         tpl.replace("{{TITLE}}", esc(deck.get("title", model.get("system", {}).get("name", "Deck"))))
@@ -518,9 +854,10 @@ def main():
     ap.add_argument("deck", type=Path, help="deck.json 경로")
     ap.add_argument("-o", "--out", type=Path, help="출력 HTML 경로 (기본: deck.json 옆)")
     ap.add_argument("--validate-only", action="store_true", help="검증만 수행")
+    ap.add_argument("--strict", action="store_true", help="린트 경고(길이·근거 누락 등)가 있으면 실패 처리")
     a = ap.parse_args()
     try:
-        sys.exit(build(a.deck, a.out, a.validate_only))
+        sys.exit(build(a.deck, a.out, a.validate_only, a.strict))
     except DeckError as e:
         print("오류:", e, file=sys.stderr)
         sys.exit(2)
