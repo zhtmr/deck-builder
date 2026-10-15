@@ -4,7 +4,7 @@
 
 ## 미리보기
 
-아래 GIF 와 이미지는 [`skills/system-deck/examples/recap/`](skills/system-deck/examples/recap/) 의 예시 장표를 **실제로 구동해 녹화한 것**입니다. 키보드 `→` 를 누를 때마다 한 단계씩 진행되는 모습 그대로이며, 직접 열어 보려면 `deck.html` / `deck-motion.html` 을 브라우저로 열고 `→` · `Space` 를 누르세요. 예시 시스템은 회의 녹음 → 요약 서비스이고, 모션 데모(`deck-motion`)의 수치는 모두 예시입니다.
+아래 GIF 와 이미지는 [`skills/system-deck/examples/recap/`](skills/system-deck/examples/recap/) 의 예시 장표를 **실제로 구동해 녹화한 것**입니다. 키보드 `→` 를 누를 때마다 한 단계씩 진행되는 모습 그대로입니다. **[라이브 데모에서 직접 조작해 보기 →](https://zhtmr.github.io/deck-builder/)** 로컬에서 열려면 `deck.html` / `deck-motion.html` 을 브라우저로 열고 `→` · `Space` 를 누르세요. 예시 시스템은 회의 녹음 → 요약 서비스이고, 모션 데모(`deck-motion`)의 수치는 모두 예시입니다.
 
 ### 시스템 구조와 요청 흐름
 
@@ -153,7 +153,7 @@ python skills/system-deck/scripts/ingest.py 기획서.hwpx -o .deck      # 변�
 python -m unittest discover -s tests
 ```
 
-`tools/record_media.py` 는 README 미리보기 미디어(`docs/media/`)를 만드는 개발용 스크립트입니다.
+`tools/record_media.py` 는 README 미리보기 미디어(`docs/media/`)를, `tools/publish_demo.py` 는 GitHub Pages 용 데모(`docs/demo/`)를 만드는 개발용 스크립트입니다. Pages 는 `master` 의 `/docs` 를 서빙합니다.
 
 ## 테마
 
