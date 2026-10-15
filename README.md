@@ -1,6 +1,61 @@
 # deck-builder
 
-구현한 시스템의 코드베이스와 git 이력을 탐색해, **데이터 흐름이 움직이는 애니메이션 토폴로지**가 들어간 발표 장표(단일 HTML)를 만들어 주는 Claude Code 플러그인입니다.
+구현한 시스템의 코드베이스와 git 이력을 탐색해, **데이터 흐름이 움직이는 애니메이션 토폴로지**가 들어간 발표 장표(단일 HTML)를 만들어 주는 Claude Code 플러그인입니다. 저장소 대신(또는 함께) HWPX·PDF·PPTX·DOCX 문서도 입력으로 받습니다.
+
+## 미리보기
+
+아래 GIF 와 이미지는 [`skills/system-deck/examples/recap/`](skills/system-deck/examples/recap/) 의 예시 장표를 **실제로 구동해 녹화한 것**입니다. 키보드 `→` 를 누를 때마다 한 단계씩 진행되는 모습 그대로이며, 직접 열어 보려면 `deck.html` / `deck-motion.html` 을 브라우저로 열고 `→` · `Space` 를 누르세요. 예시 시스템은 회의 녹음 → 요약 서비스이고, 모션 데모(`deck-motion`)의 수치는 모두 예시입니다.
+
+### 시스템 구조와 요청 흐름
+
+노드가 열 순서대로 나타나고, 자동 순환하는 패킷이 구성을 보여 준 뒤, `→` 키마다 요청 흐름이 한 단계씩 진행됩니다.
+
+![시스템 토폴로지와 요청 흐름](docs/media/topology-flow.gif)
+
+### 터미널 · 숫자 카운트업 · 벤토
+
+명령어 타이핑 → 항목별 진행 막대와 `[OK]` 배지 → 숫자가 목표값까지 올라가는 지표 카드 → 시차를 두고 올라오는 카드.
+
+![터미널, 숫자 카운트업, 벤토 그리드](docs/media/motion-terminal-stats-bento.gif)
+
+### 스크린샷 하이라이트 · 코드 매직무브 · 핵심 문장
+
+제품 화면 위에서 영역을 하나씩 강조하고, 코드가 바뀔 때 바뀌지 않은 줄은 미끄러지며 새 줄만 나타납니다.
+
+![스크린샷 하이라이트와 코드 매직무브](docs/media/motion-image-magicmove.gif)
+
+### 슬라이드 타입 한눈에
+
+모든 스텝이 끝난 상태입니다.
+
+<table>
+<tr>
+<td><img src="docs/media/title.png" alt="title"><br><sub><code>title</code> — 배경에 토폴로지</sub></td>
+<td><img src="docs/media/topology.png" alt="topology"><br><sub><code>topology</code> — 구성도</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/flow.png" alt="flow"><br><sub><code>flow</code> — 단계별 요청 흐름</sub></td>
+<td><img src="docs/media/image.png" alt="image"><br><sub><code>image</code> — 스크린샷 + 하이라이트</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/terminal.png" alt="terminal"><br><sub><code>terminal</code> — 점검·검증 현황</sub></td>
+<td><img src="docs/media/stats.png" alt="stats"><br><sub><code>stats</code> — 카운트업 + 비교 막대</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/bento.png" alt="bento"><br><sub><code>bento</code> — 핵심 효과 요약</sub></td>
+<td><img src="docs/media/code-magic-move.png" alt="code magic"><br><sub><code>code</code> + <code>magic</code> — 코드 모핑</sub></td>
+</tr>
+<tr>
+<td><img src="docs/media/statement.png" alt="statement"><br><sub><code>statement</code> — 핵심 메시지</sub></td>
+<td><img src="docs/media/timeline.png" alt="timeline"><br><sub><code>timeline</code> — 구현 과정</sub></td>
+</tr>
+</table>
+
+`o` 키를 누르면 전체 슬라이드를 한눈에 보는 오버뷰가 열립니다.
+
+![오버뷰](docs/media/overview.png)
+
+> 미리보기는 `python tools/record_media.py` 로 다시 만들 수 있습니다 (`pip install playwright pillow && python -m playwright install chromium`). 예시를 고치면 `build_deck.py` 로 다시 빌드한 뒤 실행하세요.
 
 ## 설치
 
@@ -97,6 +152,8 @@ python skills/system-deck/scripts/ingest.py 기획서.hwpx -o .deck      # 변�
 ```bash
 python -m unittest discover -s tests
 ```
+
+`tools/record_media.py` 는 README 미리보기 미디어(`docs/media/`)를 만드는 개발용 스크립트입니다.
 
 ## 테마
 
