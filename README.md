@@ -6,7 +6,7 @@
 
 ```bash
 # 압축을 푼 폴더 기준
-/plugin marketplace add /path/to/deck-builder
+/plugin marketplace add zhtmr/deck-builder
 /plugin install deck-builder@deck-builder-local
 ```
 
