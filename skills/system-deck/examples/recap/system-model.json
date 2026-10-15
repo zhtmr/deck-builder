@@ -1,0 +1,53 @@
+{
+  "system": {
+    "name": "Recap",
+    "summary": "브라우저에서 녹음한 회의를 STT와 LLM 요약으로 회의록으로 만들어 주는 사내 서비스",
+    "repo": "sample-recap",
+    "generated_at": "2026-10-14"
+  },
+  "nodes": [
+    { "id": "web", "label": "브라우저 녹음기", "kind": "client", "tech": "MediaRecorder · TS", "evidence": ["web/src/recorder.ts:1"] },
+    { "id": "nginx", "label": "Nginx", "kind": "gateway", "tech": "리버스 프록시", "evidence": ["docker-compose.yml:20"] },
+    { "id": "api", "label": "API 서버", "kind": "service", "tech": "Spring Boot", "evidence": ["api-server/src/main/java/com/dnacare/recap/upload/UploadController.java:3"] },
+    { "id": "kafka", "label": "Kafka", "kind": "queue", "tech": "stt.requested / stt.completed", "evidence": ["api-server/src/main/resources/application.yml:6"] },
+    { "id": "stt", "label": "STT 워커", "kind": "worker", "tech": "FastAPI · faster-whisper", "evidence": ["stt-worker/app/main.py:7"] },
+    { "id": "minio", "label": "MinIO", "kind": "storage", "tech": "recap-audio 버킷", "evidence": ["api-server/src/main/resources/application.yml:9"] },
+    { "id": "pg", "label": "PostgreSQL", "kind": "db", "tech": "회의 · 회의록", "evidence": ["api-server/src/main/resources/application.yml:3"] },
+    { "id": "claude", "label": "Claude API", "kind": "ai", "tech": "요약 생성", "evidence": ["stt-worker/app/main.py:12"] },
+    { "id": "slack", "label": "Slack", "kind": "external", "tech": "Webhook 알림", "evidence": ["api-server/src/main/java/com/dnacare/recap/job/SttResultListener.java:7"] }
+  ],
+  "edges": [
+    { "id": "e-web-nginx", "from": "web", "to": "nginx", "label": "HTTPS", "protocol": "HTTP" },
+    { "id": "e-nginx-api", "from": "nginx", "to": "api", "label": "REST · SSE", "protocol": "HTTP" },
+    { "id": "e-web-minio", "from": "web", "to": "minio", "label": "Presigned PUT", "protocol": "HTTP" },
+    { "id": "e-api-kafka", "from": "api", "to": "kafka", "label": "stt.requested", "protocol": "Kafka", "async": true },
+    { "id": "e-kafka-stt", "from": "kafka", "to": "stt", "label": "consume", "protocol": "Kafka", "async": true },
+    { "id": "e-stt-minio", "from": "stt", "to": "minio", "label": "get_object", "protocol": "S3" },
+    { "id": "e-stt-claude", "from": "stt", "to": "claude", "label": "messages.create", "protocol": "HTTP" },
+    { "id": "e-stt-kafka", "from": "stt", "to": "kafka", "label": "stt.completed", "protocol": "Kafka", "async": true },
+    { "id": "e-kafka-api", "from": "kafka", "to": "api", "label": "@KafkaListener", "protocol": "Kafka", "async": true },
+    { "id": "e-api-pg", "from": "api", "to": "pg", "label": "JPA", "protocol": "SQL" },
+    { "id": "e-api-slack", "from": "api", "to": "slack", "label": "Webhook", "protocol": "HTTP" }
+  ],
+  "flows": [
+    {
+      "id": "record-to-minutes",
+      "title": "녹음에서 회의록까지",
+      "description": "업로드는 브라우저가 스토리지로 직접 보내고, 무거운 STT·요약은 Kafka 뒤의 워커가 비동기로 처리합니다.",
+      "steps": [
+        { "edge": "e-web-nginx", "note": "녹음 종료 후 업로드 URL 요청" },
+        { "edge": "e-nginx-api", "note": "`POST /api/uploads/presign` — Presigned URL 발급" },
+        { "edge": "e-web-minio", "note": "오디오를 API 서버를 거치지 않고 MinIO에 직접 업로드" },
+        { "edge": "e-api-kafka", "note": "`complete` 호출 시 `stt.requested` 이벤트 발행" },
+        { "edge": "e-kafka-stt", "note": "STT 워커가 이벤트 수신" },
+        { "edge": "e-stt-minio", "note": "오디오 파일 다운로드 후 faster-whisper 전사" },
+        { "edge": "e-stt-claude", "note": "전사문을 Claude로 요약해 회의록 초안 생성" },
+        { "edge": "e-stt-kafka", "note": "결과를 `stt.completed`로 발행" },
+        { "edge": "e-kafka-api", "note": "API 서버가 결과 수신" },
+        { "edge": "e-api-pg", "note": "회의록 저장" },
+        { "edge": "e-nginx-api", "note": "SSE로 브라우저에 완료 알림", "reverse": true },
+        { "edge": "e-api-slack", "note": "Slack 채널에 회의록 링크 공유" }
+      ]
+    }
+  ]
+}

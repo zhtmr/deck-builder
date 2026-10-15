@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ko" data-theme="{{THEME}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+:root{
+  --accent: {{ACCENT}};
+  --bg:#0a0f1e; --bg2:#0f1629; --panel:#121a30; --fg:#e8edf7; --muted:#8b97b3; --edge:#3a4766; --line:#1d2742;
+  --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "D2Coding", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+html[data-theme="light"]{
+  --bg:#f7f8fb; --bg2:#eef1f7; --panel:#ffffff; --fg:#141a2b; --muted:#5b6680; --edge:#b7c0d4; --line:#e2e6ef;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden;word-break:keep-all;overflow-wrap:anywhere}
+body{display:grid;place-items:center}
+#stage{position:relative;width:1600px;height:900px;transform-origin:center center;flex:none}
+.slide{position:absolute;inset:0;padding:64px 88px 56px;visibility:hidden;opacity:0;transition:opacity .45s ease,visibility 0s .45s;
+  background:radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb,var(--accent) 9%, transparent), transparent 60%),
+             linear-gradient(var(--bg),var(--bg2));overflow:hidden}
+.slide::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:48px 48px;mask-image:radial-gradient(ellipse at 70% 40%,#000 0%,transparent 70%)}
+.slide.active{visibility:visible;opacity:1;transition:opacity .45s ease}
+.slide > *{position:relative}
+h1,h2,h3{margin:0;letter-spacing:-.02em}
+h2{font-size:44px;font-weight:800;margin-bottom:34px}
+h2::before{content:"";display:inline-block;width:10px;height:34px;border-radius:3px;background:var(--accent);margin-right:18px;vertical-align:-4px}
+code{font-family:var(--mono);font-size:.88em;background:color-mix(in srgb,var(--accent) 14%,transparent);padding:.08em .4em;border-radius:6px}
+b{color:var(--accent);font-weight:700}
+.pg{position:absolute;right:40px;bottom:26px;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.notes{display:none}
+#progress{position:fixed;left:0;bottom:0;height:3px;background:var(--accent);transition:width .35s;z-index:5}
+#notes{position:fixed;left:0;right:0;bottom:0;max-height:34vh;overflow:auto;background:rgba(0,0,0,.85);color:#fff;font:18px/1.6 var(--font);
+  padding:18px 28px;display:none;z-index:9;white-space:pre-wrap}
+body.show-notes #notes{display:block}
+
+/* ---------- title / section ---------- */
+.title-wrap{position:absolute!important;left:96px;top:0;bottom:0;width:700px;display:flex;flex-direction:column;justify-content:center;z-index:2}
+.eyebrow{font-size:20px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:22px}
+.t-title h1{font-size:76px;line-height:1.12;font-weight:850}
+.sub{font-size:28px;color:var(--muted);margin-top:22px;line-height:1.5}
+.meta{margin-top:56px;font-size:20px;color:var(--fg);display:flex;gap:24px}
+.meta span{color:var(--muted)}
+.title-bg{position:absolute!important;right:-30px;top:110px;width:840px;height:680px;opacity:.6;
+  mask-image:linear-gradient(90deg,transparent 0%,#000 22%)}
+.title-bg svg{width:100%;height:100%}
+.title-bg .e-lab,.title-bg .n-tech{display:none}
+.sec{height:100%;display:flex;flex-direction:column;justify-content:center;padding-left:24px}
+.sec-no{font-size:120px;font-weight:900;color:transparent;-webkit-text-stroke:2px var(--accent);line-height:1;margin-bottom:12px}
+.sec h1{font-size:72px;font-weight:850}
+.end{align-items:center;text-align:center;padding:0}
+
+/* ---------- bullets / stats / split ---------- */
+.bul{list-style:none;margin:0;padding:0;font-size:32px;line-height:1.5;max-width:1300px}
+.bul > li{padding:14px 0 14px 46px;position:relative;border-bottom:1px solid var(--line)}
+.bul > li::before{content:"";position:absolute;left:6px;top:30px;width:14px;height:14px;border-radius:4px;background:var(--accent);transform:rotate(45deg)}
+.bul ul{margin:8px 0 0;padding-left:26px;font-size:25px;color:var(--muted)}
+.frag{opacity:0;transform:translateY(14px);transition:opacity .4s,transform .4s}
+.frag.on,.all .frag{opacity:1;transform:none}
+.stats{display:grid;gap:28px;margin-top:40px}
+.stats.n1{grid-template-columns:1fr}.stats.n2{grid-template-columns:repeat(2,1fr)}.stats.n3{grid-template-columns:repeat(3,1fr)}
+.stats.n4,.stats.n5,.stats.n6{grid-template-columns:repeat(3,1fr)}.stats.n4{grid-template-columns:repeat(4,1fr)}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:40px 36px;border-top:4px solid var(--accent)}
+.stat .v{font-size:76px;font-weight:850;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.stat .l{font-size:26px;margin-top:8px;font-weight:600}
+.stat .h{font-size:19px;color:var(--muted);margin-top:10px;line-height:1.5}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:36px}
+.col{background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:34px 40px}
+.col h3{font-size:30px;margin-bottom:16px;color:var(--accent)}
+.col ul{margin:0;padding-left:26px;font-size:25px;line-height:1.7}
+
+/* ---------- code ---------- */
+.code-wrap{display:grid;grid-template-columns:1fr;gap:32px}
+.code-wrap.with-pts{grid-template-columns:1fr 420px}
+.code{background:#0b1222;border:1px solid var(--line);border-radius:18px;overflow:hidden}
+html[data-theme="light"] .code{background:#0f172a}
+.code .file{font:600 15px var(--mono);color:#8b97b3;padding:14px 22px;border-bottom:1px solid #1d2742;background:#0e1628}
+.code pre{margin:0;padding:18px 0;max-height:640px;overflow:hidden}
+.code pre code{background:none;padding:0;font-size:19px;line-height:1.6;color:#d5def0;display:block}
+.code .ln{display:block;padding:0 24px 0 72px;position:relative;white-space:pre}
+.code .ln::before{content:attr(data-n);position:absolute;left:0;width:52px;text-align:right;color:#4a5878}
+.code .ln.hl{background:color-mix(in srgb,var(--accent) 16%,transparent);box-shadow:inset 4px 0 var(--accent)}
+.code-pts{margin:0;padding:0;list-style:none;font-size:24px;line-height:1.55}
+.code-pts li{padding:16px 0;border-bottom:1px solid var(--line)}
+
+/* ---------- topology ---------- */
+.topo-wrap{height:690px;position:relative}
+.topo{width:100%;height:100%;overflow:visible;font-family:var(--font)}
+.cap{position:absolute!important;left:88px;bottom:30px;font-size:20px;color:var(--muted);margin:0;max-width:1100px}
+.legend{position:absolute!important;right:88px;top:136px;display:flex;gap:18px;font-size:14px;color:var(--muted);font-weight:600;letter-spacing:.05em}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+.legend i.dash{background:none;border-top:2px dashed var(--muted);border-radius:0;height:0;width:18px;vertical-align:3px}
+.node{transform-box:fill-box;transform-origin:center;opacity:0}
+.slide.active .node{animation:nodeIn .55s cubic-bezier(.2,.8,.2,1) var(--d) both}
+@keyframes nodeIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.n-body{fill:color-mix(in srgb,var(--c) 13%,var(--panel));stroke:var(--c);stroke-width:1.6;transition:stroke-width .3s,fill .3s}
+.n-rim{fill:none;stroke:var(--c);stroke-width:1.4;opacity:.8}
+.n-tag{fill:var(--c);font-size:11px;font-weight:800;letter-spacing:.14em;text-anchor:middle}
+.n-label{fill:var(--fg);font-weight:700;text-anchor:middle}
+.n-tech{fill:var(--muted);font-size:13px;text-anchor:middle}
+.node.hot .n-body{fill:color-mix(in srgb,var(--c) 32%,var(--panel));stroke-width:3.2;filter:drop-shadow(0 0 14px var(--c))}
+.node.visited .n-body{stroke-width:2.4;fill:color-mix(in srgb,var(--c) 22%,var(--panel))}
+.node.dim,.edge.dim{opacity:.18!important;transition:opacity .4s}
+.e-geo{fill:none;stroke:none}
+.e-base{fill:none;stroke:var(--edge);stroke-width:2;stroke-dasharray:1;stroke-dashoffset:1;opacity:0}
+.slide.active .e-base{animation:draw .9s ease var(--d) forwards}
+@keyframes draw{0%{opacity:1;stroke-dashoffset:1}100%{opacity:1;stroke-dashoffset:0}}
+.ar{fill:var(--edge)} .arh{fill:var(--accent)}
+.e-ants{display:none;fill:none;stroke:var(--muted);stroke-width:2;stroke-dasharray:3 7;opacity:0}
+.async .e-ants{display:inline}
+.slide.active .async .e-ants{animation:antsIn .3s ease calc(var(--d) + .9s) forwards, ants 1.1s linear infinite}
+.async .e-base{stroke-opacity:.25}
+@keyframes ants{to{stroke-dashoffset:-20}}
+@keyframes antsIn{to{opacity:.8}}
+.e-hl{fill:none;stroke:var(--accent);stroke-width:3.6;stroke-linecap:round;stroke-dasharray:1;stroke-dashoffset:1;opacity:0;
+  transition:stroke-dashoffset .6s ease,opacity .2s,stroke-width .3s}
+.edge.on .e-hl{opacity:1;stroke-dashoffset:0}
+.edge.done .e-hl{opacity:.38;stroke-dashoffset:0;stroke-width:2.6}
+.e-lab rect{fill:var(--bg);stroke:var(--line)}
+.e-lab text{fill:var(--muted);font-size:12.5px;font-weight:600;text-anchor:middle;dominant-baseline:central}
+.e-lab{opacity:0;transition:opacity .3s}
+.slide.active .e-lab{animation:fade .4s ease calc(var(--d) + .7s) forwards}
+.t-flow .slide.active .e-lab, .t-flow.active .e-lab{animation:none;opacity:0}
+.t-flow .edge.on .e-lab,.t-flow .edge.done .e-lab{opacity:1}
+.edge.on .e-lab text{fill:var(--accent)} .edge.on .e-lab rect{stroke:var(--accent)}
+@keyframes fade{to{opacity:1}}
+.packets circle{fill:var(--accent)}
+
+/* ---------- flow ---------- */
+.flow-grid{display:grid;grid-template-columns:940px 1fr;gap:28px;height:700px}
+.flow-grid .topo-wrap{height:700px}
+.steps{overflow:hidden;display:flex;flex-direction:column}
+.fdesc{margin:0 0 14px;color:var(--muted);font-size:18px;line-height:1.5}
+.steps ol{list-style:none;margin:0;padding:0;overflow:hidden;flex:1;position:relative;
+  mask-image:linear-gradient(transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%)}
+.steps li{display:flex;gap:14px;padding:9px 14px;border-radius:14px;opacity:.38;transition:opacity .3s,background .3s;margin-bottom:2px}
+.steps li .no{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:15px;
+  border:2px solid var(--muted);color:var(--muted)}
+.steps .hop{font-weight:700;font-size:19px}
+.steps .hop i{font-style:normal;color:var(--accent);margin:0 4px}
+.steps .note{font-size:16.5px;color:var(--muted);margin-top:3px;line-height:1.45}
+.steps li.done{opacity:.75}
+.steps li.done .no{border-color:var(--accent);color:var(--accent)}
+.steps li.on{opacity:1;background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.steps li.on .no{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+
+/* ---------- toss 테마: 흰 배경 · 블루 포인트 · 큰 굵은 타이포 · 넉넉한 여백 · 둥근 카드 ---------- */
+html[data-theme="toss"]{
+  --bg:#ffffff; --bg2:#ffffff; --panel:#f2f4f6; --fg:#191f28; --muted:#6b7684; --edge:#d1d6db; --line:#e5e8eb;
+}
+html[data-theme="toss"] .slide{background:#fff;padding:72px 96px 60px}
+html[data-theme="toss"] .slide::before{display:none}
+html[data-theme="toss"] h2{font-size:48px;font-weight:700;letter-spacing:-.035em;margin-bottom:40px}
+html[data-theme="toss"] h2::before{display:none}
+html[data-theme="toss"] b{color:var(--accent);font-weight:700}
+html[data-theme="toss"] code{background:#f2f4f6;color:#4e5968}
+html[data-theme="toss"] .eyebrow{letter-spacing:0;text-transform:none;font-size:24px;font-weight:600}
+html[data-theme="toss"] .t-title h1{font-size:80px;font-weight:700;letter-spacing:-.04em}
+html[data-theme="toss"] .sub{color:#8b95a1}
+html[data-theme="toss"] .title-bg{opacity:.9}
+html[data-theme="toss"] .sec-no{-webkit-text-stroke:0;color:var(--accent);font-size:28px;font-weight:700;margin-bottom:20px}
+html[data-theme="toss"] .sec h1{font-size:68px;font-weight:700;letter-spacing:-.04em}
+html[data-theme="toss"] .bul{display:flex;flex-direction:column;gap:16px;font-size:30px}
+html[data-theme="toss"] .bul > li{background:#f9fafb;border:0;border-radius:24px;padding:26px 34px 26px 74px}
+html[data-theme="toss"] .bul > li::before{left:34px;top:40px;width:12px;height:12px;border-radius:50%;transform:none}
+html[data-theme="toss"] .bul ul{color:#6b7684}
+html[data-theme="toss"] .stat,html[data-theme="toss"] .col{background:#f9fafb;border:0;border-radius:28px}
+html[data-theme="toss"] .stat .v{color:var(--accent);font-weight:700}
+html[data-theme="toss"] .stat .l{color:#333d4b}
+html[data-theme="toss"] .col h3{color:#191f28}
+html[data-theme="toss"] .code{background:#191f28;border:0;border-radius:24px}
+html[data-theme="toss"] .code .file{background:#191f28;border-color:#333d4b}
+html[data-theme="toss"] .code-pts li{border-color:#f2f4f6}
+html[data-theme="toss"] .n-body{fill:#fff;stroke:#e5e8eb;stroke-width:1.2;filter:drop-shadow(0 6px 14px rgba(0,27,55,.08))}
+html[data-theme="toss"] .n-rim{stroke:var(--c);opacity:.6}
+html[data-theme="toss"] .n-tag{font-size:11.5px;letter-spacing:.06em}
+html[data-theme="toss"] .n-label{fill:#191f28}
+html[data-theme="toss"] .n-tech{fill:#8b95a1}
+html[data-theme="toss"] .node.hot .n-body{fill:#e8f3ff;stroke:var(--accent);stroke-width:2.4;filter:drop-shadow(0 8px 20px rgba(49,130,246,.28))}
+html[data-theme="toss"] .node.visited .n-body{stroke:#90c2ff;stroke-width:1.6;fill:#f5faff}
+html[data-theme="toss"] .ar{fill:#c5cbd1}
+html[data-theme="toss"] .e-ants{stroke:#8b95a1}
+html[data-theme="toss"] .e-lab rect{fill:#fff;stroke:#e5e8eb}
+html[data-theme="toss"] .e-lab text{fill:#6b7684}
+html[data-theme="toss"] .steps li{opacity:.45}
+html[data-theme="toss"] .steps li.on{background:#e8f3ff;opacity:1}
+html[data-theme="toss"] .steps li.on .no{color:#fff}
+html[data-theme="toss"] .legend{color:#8b95a1}
+html[data-theme="toss"] #progress{height:4px}
+
+/* ---------- 정지 화면(스크린샷/인쇄) ---------- */
+body.still .slide *, body.still .slide{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
+@media print{
+  @page{size:1600px 900px;margin:0}
+  html,body{overflow:visible;height:auto;display:block;background:none}
+  #stage{transform:none!important;width:1600px;height:auto}
+  .slide{position:relative;visibility:visible;opacity:1;width:1600px;height:900px;page-break-after:always;break-after:page}
+  .slide *{animation-duration:0s!important;animation-delay:0s!important;transition:none!important}
+  .frag{opacity:1;transform:none}
+  .node{opacity:1}.e-base{opacity:1;stroke-dashoffset:0}.e-lab{opacity:1}
+  #progress,#notes,.packets{display:none}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+{{SLIDES}}
+</div>
+<div id="progress"></div>
+<div id="notes"></div>
+<script>
+(() => {
+  const stage = document.getElementById('stage');
+  const slides = [...stage.querySelectorAll('.slide')];
+  const prog = document.getElementById('progress');
+  const notesBox = document.getElementById('notes');
+  let cur = 0, step = 0, autoTimer = null;
+  const packets = new Set();
+
+  // ---------- 화면 맞춤 ----------
+  function fit(){
+    const s = Math.min(innerWidth/1600, innerHeight/900);
+    stage.style.transform = `scale(${s})`;
+  }
+  addEventListener('resize', fit); fit();
+
+  // ---------- 간선 라벨 배치 ----------
+  // 노드 안 텍스트가 상자보다 길면 글자 크기를 줄이고, 그래도 길면 말줄임
+  function fitNodeText(root){
+    root.querySelectorAll('.node').forEach(n => {
+      const body = n.querySelector('.n-body'); if (!body) return;
+      const maxW = body.getBBox().width - (n.classList.contains('k-queue') ? 34 : n.classList.contains('k-ai') ? 40 : 18);
+      n.querySelectorAll('.n-label,.n-tech').forEach(t => {
+        if (!t.dataset.full) t.dataset.full = t.textContent;
+        t.textContent = t.dataset.full; t.style.fontSize = '';
+        let fs = parseFloat(getComputedStyle(t).fontSize), min = fs * 0.72;
+        while (t.getComputedTextLength() > maxW && fs > min){ fs -= 0.5; t.style.fontSize = fs + 'px'; }
+        let s = t.dataset.full;
+        while (t.getComputedTextLength() > maxW && s.length > 2){ s = s.slice(0, -1); t.textContent = s + '…'; }
+      });
+    });
+  }
+
+  // 간선 라벨: 노드·다른 라벨과 겹치지 않는 위치를 경로 위에서 찾는다
+  function placeLabels(root){
+    const hit = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    const area = (a, b) => Math.max(0, Math.min(a.x+a.width, b.x+b.width) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y+a.height, b.y+b.height) - Math.max(a.y, b.y));
+    const obstacles = [...root.querySelectorAll('.node .n-body')].map(b => { const r = b.getBBox(); return {x:r.x-6, y:r.y-6, width:r.width+12, height:r.height+12}; });
+    const nodeBoxes = obstacles.slice();
+    const edges = [...root.querySelectorAll('.edge')].map(g => ({g, L: g.querySelector('.e-geo').getTotalLength()})).sort((a,b) => a.L - b.L);
+    const ts = [.5,.42,.58,.34,.66,.26,.74,.2,.8,.14,.86];
+    for (const {g, L} of edges){
+      const geo = g.querySelector('.e-geo'), lab = g.querySelector('.e-lab');
+      const t = lab.querySelector('text'), r = lab.querySelector('rect');
+      if (!t.textContent.trim()){ lab.style.display='none'; continue; }
+      let best = null;
+      const cands = [];
+      for (const u of ts) for (const dy of [0, -15, 15]) cands.push([u, dy]);
+      for (const [u, dy] of cands){
+        const q = geo.getPointAtLength(L*u), p = {x:q.x, y:q.y+dy};
+        t.setAttribute('x', p.x); t.setAttribute('y', p.y);
+        const bb = t.getBBox(), box = {x:bb.x-7, y:bb.y-3, width:bb.width+14, height:bb.height+6};
+        const cost = obstacles.reduce((s,o) => s + area(box,o), 0) + Math.abs(u-.5)*40 + Math.abs(dy)*2;
+        if (!best || cost < best.cost) best = {cost, p, box};
+        if (!obstacles.some(o => hit(box,o))) { best = {cost, p, box}; break; }
+      }
+      // 노드와 겹칠 수밖에 없는 짧은 간선의 라벨은 숨긴다 (발표 중엔 흐름 패널이 같은 정보를 보여 줌)
+      if (nodeBoxes.some(o => area(best.box, o) > best.box.width * best.box.height * 0.15)){ lab.style.display = 'none'; continue; }
+      t.setAttribute('x', best.p.x); t.setAttribute('y', best.p.y);
+      r.setAttribute('x', best.box.x); r.setAttribute('y', best.box.y);
+      r.setAttribute('width', best.box.width); r.setAttribute('height', best.box.height);
+      obstacles.push(best.box);
+    }
+  }
+  function prepareSvgs(){ document.querySelectorAll('svg.topo').forEach(s => { fitNodeText(s); placeLabels(s); }); }
+
+  // ---------- 패킷 애니메이션 ----------
+  function addPacket(svg, edgeEl, reverse, opts={}){
+    const geo = edgeEl.querySelector('.e-geo');
+    const layer = svg.querySelector('.packets');
+    const L = geo.getTotalLength();
+    const dots = [7, 5, 3.4].map((r,i) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('r', r); c.style.opacity = [1,.55,.3][i]; layer.appendChild(c); return c;
+    });
+    const pk = {geo, L, reverse, dots, t0: performance.now(), dur: opts.dur || Math.max(900, L*2.4), once: opts.once};
+    packets.add(pk); return pk;
+  }
+  function clearPackets(scope){
+    for (const pk of [...packets]){
+      if (!scope || scope.contains(pk.geo)){ pk.dots.forEach(d=>d.remove()); packets.delete(pk); }
+    }
+  }
+  function tick(now){
+    for (const pk of packets){
+      let t = (now - pk.t0) / pk.dur;
+      if (pk.once && t >= 1){ pk.dots.forEach(d=>d.remove()); packets.delete(pk); continue; }
+      t = t % 1;
+      pk.dots.forEach((d,i) => {
+        let u = Math.max(0, t - i*0.035);
+        if (pk.reverse) u = 1-u;
+        const p = pk.geo.getPointAtLength(u*pk.L);
+        d.setAttribute('cx', p.x); d.setAttribute('cy', p.y);
+      });
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // ---------- 플로우 상태 ----------
+  function nodeEl(svg, id){ return svg.querySelector(`.node[data-id="${CSS.escape(id)}"]`); }
+  function edgeEl(svg, id){ return svg.querySelector(`.edge[data-id="${CSS.escape(id)}"]`); }
+
+  function applyFlow(slide, seq, k, opts={}){
+    const svg = slide.querySelector('svg.topo');
+    clearPackets(svg);
+    svg.querySelectorAll('.edge').forEach(e => e.classList.remove('on','done'));
+    svg.querySelectorAll('.node').forEach(n => n.classList.remove('hot','visited'));
+    const lis = slide.querySelectorAll('.steps li');
+    lis.forEach(li => li.classList.remove('on','done'));
+    seq.forEach(([eid, rev], j) => {
+      const e = edgeEl(svg, eid); if (!e) return;
+      const a = nodeEl(svg, e.dataset.from), b = nodeEl(svg, e.dataset.to);
+      if (j < k-1){ e.classList.add('done'); a&&a.classList.add('visited'); b&&b.classList.add('visited'); lis[j]&&lis[j].classList.add('done'); }
+      if (j === k-1){
+        e.classList.add('on'); a&&a.classList.add('hot'); b&&b.classList.add('hot');
+        lis[j]&&lis[j].classList.add('on');
+        if (!opts.still) addPacket(svg, e, rev, {once: opts.once, dur: opts.dur});
+        const ol = slide.querySelector('.steps ol');
+        if (ol && lis[j]){ const top = lis[j].offsetTop - ol.clientHeight/2 + lis[j].clientHeight/2; ol.scrollTo({top, behavior: opts.still?'auto':'smooth'}); }
+      }
+    });
+  }
+
+  function applyFocus(slide){
+    const f = slide.dataset.focus; if (!f) return;
+    const keep = new Set(JSON.parse(f));
+    slide.querySelectorAll('.node').forEach(n => n.classList.toggle('dim', !keep.has(n.dataset.id)));
+    slide.querySelectorAll('.edge').forEach(e => e.classList.toggle('dim', !(keep.has(e.dataset.from) && keep.has(e.dataset.to))));
+  }
+
+  function startAuto(slide){
+    stopAuto();
+    const seq = JSON.parse(slide.dataset.autoflow);
+    let k = 0;
+    const run = () => { k = k % (seq.length + 1) + 1; if (k > seq.length) k = 0; applyFlow(slide, seq, k, {once:true, dur:1300}); };
+    autoTimer = setTimeout(function loop(){ run(); autoTimer = setTimeout(loop, k === 0 ? 900 : 1450); }, 1600);
+  }
+  function stopAuto(){ if (autoTimer){ clearTimeout(autoTimer); autoTimer = null; } }
+
+  // ---------- 렌더 ----------
+  function render(still){
+    slides.forEach((s,i) => s.classList.toggle('active', i === cur));
+    const s = slides[cur];
+    s.querySelectorAll('.frag').forEach((f,i) => f.classList.toggle('on', i < step));
+    stopAuto(); clearPackets();
+    if (s.dataset.flow) applyFlow(s, JSON.parse(s.dataset.flow), step, {still});
+    else if (s.dataset.autoflow && !still) startAuto(s);
+    applyFocus(s);
+    prog.style.width = ((cur + 1) / slides.length * 100) + '%';
+    notesBox.textContent = s.querySelector('.notes')?.textContent || '';
+    if (location.hash !== '#' + (cur+1)) history.replaceState(null, '', '#' + (cur+1));
+  }
+  function restart(s){ s.classList.remove('active'); void s.offsetWidth; }
+
+  function go(i, k=0, still=false){
+    i = Math.max(0, Math.min(slides.length-1, i));
+    if (i !== cur) restart(slides[i]);
+    cur = i; step = Math.max(0, Math.min(+slides[i].dataset.steps || 0, k));
+    render(still);
+  }
+  function next(){
+    const max = +slides[cur].dataset.steps || 0;
+    if (step < max){ step++; render(); } else if (cur < slides.length-1) go(cur+1, 0);
+  }
+  function prev(){
+    if (step > 0){ step--; render(); } else if (cur > 0) go(cur-1, +slides[cur-1].dataset.steps || 0);
+  }
+
+  addEventListener('keydown', e => {
+    if (['ArrowRight','ArrowDown',' ','PageDown','Enter'].includes(e.key)){ e.preventDefault(); next(); }
+    else if (['ArrowLeft','ArrowUp','PageUp','Backspace'].includes(e.key)){ e.preventDefault(); prev(); }
+    else if (e.key === 'Home') go(0); else if (e.key === 'End') go(slides.length-1);
+    else if (e.key === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+    else if (e.key === 's') document.body.classList.toggle('show-notes');
+    else if (e.key === 't'){ const T = ['dark','light','toss'], h = document.documentElement; h.dataset.theme = T[(T.indexOf(h.dataset.theme)+1) % T.length]; }
+  });
+  addEventListener('click', e => { if (e.target.closest('a')) return; (e.clientX < innerWidth/3 ? prev : next)(); });
+  let tx = null;
+  addEventListener('touchstart', e => tx = e.touches[0].clientX, {passive:true});
+  addEventListener('touchend', e => { if (tx === null) return; const dx = e.changedTouches[0].clientX - tx; tx = null;
+    if (Math.abs(dx) > 40) (dx < 0 ? next : prev)(); }, {passive:true});
+  addEventListener('beforeprint', () => slides.forEach(s => { if (s.dataset.flow){ const q = JSON.parse(s.dataset.flow); applyFlow(s, q, q.length, {still:true}); } }));
+
+  // ---------- 코드 하이라이트 (온라인일 때만) ----------
+  function highlight(){
+    if (!window.hljs) return;
+    document.querySelectorAll('.code code').forEach(c => {
+      const lang = (c.className.match(/language-(\S+)/)||[])[1];
+      if (!lang || !hljs.getLanguage(lang)) return;
+      c.querySelectorAll('.ln').forEach(l => { l.innerHTML = hljs.highlight(l.textContent, {language: lang, ignoreIllegals: true}).value; });
+    });
+  }
+  if (document.querySelector('.code')){
+    const l = document.createElement('link'); l.rel='stylesheet';
+    l.href='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css'; document.head.appendChild(l);
+    const sc = document.createElement('script'); sc.src='https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
+    sc.onload = highlight; document.head.appendChild(sc);
+  }
+
+  // ---------- 시작 ----------
+  prepareSvgs();
+  if (document.fonts) document.fonts.ready.then(prepareSvgs);
+  const params = new URLSearchParams(location.search);
+  if (params.has('still')) document.body.classList.add('still');
+  const start = parseInt((location.hash||'').slice(1)) || 1;
+  go(start-1, 0);
+  window.deck = { go, next, prev, count: slides.length, steps: i => +slides[i].dataset.steps || 0 };
+})();
+</script>
+</body>
+</html>

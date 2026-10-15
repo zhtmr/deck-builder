@@ -1,0 +1,11 @@
+{
+  "name": "deck-builder-local",
+  "owner": { "name": "gdgd" },
+  "plugins": [
+    {
+      "name": "deck-builder",
+      "source": "./",
+      "description": "코드베이스를 탐색해 애니메이션 토폴로지가 들어간 시스템 발표 장표를 생성"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "deck-builder",
+  "version": "0.1.0",
+  "description": "구현한 시스템의 코드베이스와 구현 이력을 탐색해, 애니메이션 토폴로지가 들어간 HTML 발표 장표를 만들어 주는 에이전트",
+  "author": { "name": "gdgd" },
+  "keywords": ["presentation", "slides", "architecture", "topology", "codebase"]
+}

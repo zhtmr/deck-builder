@@ -1,0 +1,131 @@
+{
+  "title": "Recap — 회의록 자동 기록 서비스",
+  "subtitle": "녹음 한 번으로 전사·요약·공유까지",
+  "eyebrow": "사내 시스템 구현 발표",
+  "author": "최성원 · 백엔드",
+  "date": "2026.10",
+  "theme": "toss",
+  "model": "system-model.json",
+  "slides": [
+    {
+      "type": "title",
+      "notes": "인사 후 한 문장 요약: 회의 녹음을 올리면 회의록이 슬랙에 올라온다."
+    },
+    {
+      "type": "bullets",
+      "title": "왜 만들었나",
+      "bullets": [
+        "주 1회 2시간 회의, 회의록 작성에 **매번 1시간 이상** 소요",
+        "외부 SaaS는 사내 데이터 반출 이슈 — **직접 구현**으로 결정",
+        {
+          "text": "범위는 의도적으로 좁게",
+          "sub": [
+            "실시간 전사 대신 회의 후 일괄 처리",
+            "브라우저 녹음만 지원"
+          ]
+        }
+      ],
+      "notes": "문제와 제약을 먼저 공유해 아키텍처 선택의 이유를 깔아둔다."
+    },
+    {
+      "type": "section",
+      "no": "01",
+      "title": "아키텍처",
+      "subtitle": "구성 요소와 연결"
+    },
+    {
+      "type": "topology",
+      "title": "전체 구성",
+      "flow": "record-to-minutes",
+      "caption": "점선은 Kafka 비동기 구간 — 무거운 처리를 요청 경로에서 분리했습니다.",
+      "notes": "패킷이 흐르는 순서대로 한 바퀴 설명. 비동기 구간 강조."
+    },
+    {
+      "type": "flow",
+      "flow": "record-to-minutes",
+      "title": "요청 흐름 따라가기",
+      "notes": "→ 키로 한 단계씩. 3번(직접 업로드)과 4번(비동기 분리)에서 멈춰 설계 이유 설명."
+    },
+    {
+      "type": "topology",
+      "title": "STT 워커 구간",
+      "focus": [
+        "kafka",
+        "stt",
+        "minio",
+        "claude"
+      ],
+      "caption": "워커는 상태 없이 이벤트만 처리하므로 GPU 서버를 늘리면 수평 확장됩니다."
+    },
+    {
+      "type": "code",
+      "title": "업로드 완료 → 이벤트 발행",
+      "file": "api-server/.../upload/UploadController.java",
+      "lang": "java",
+      "start_line": 1,
+      "highlight": [
+        8,
+        9,
+        10
+      ],
+      "code": "package com.dnacare.recap.upload;\n@RestController\n@RequestMapping(\"/api/uploads\")\npublic class UploadController {\n    private final S3Presigner presigner;\n    @PostMapping(\"/presign\")\n    public PresignResponse presign(@RequestBody PresignRequest req) { return service.presign(req); }\n    @PostMapping(\"/{meetingId}/complete\")\n    public void complete(@PathVariable Long meetingId) {\n        kafkaTemplate.send(\"stt.requested\", meetingId.toString());\n    }\n}",
+      "points": [
+        "오디오 바이트는 API 서버를 **통과하지 않음**",
+        "완료 신호만 받아 `stt.requested` 발행",
+        "요청은 즉시 반환 — 처리 진행은 SSE로 통지"
+      ]
+    },
+    {
+      "type": "section",
+      "no": "02",
+      "title": "구현 과정",
+      "subtitle": "8월 초 착수 → 9월 말 안정화"
+    },
+    {
+      "type": "split",
+      "title": "구현 타임라인",
+      "left": {
+        "title": "8월",
+        "bullets": [
+          "프로젝트 구성 (Gradle 멀티모듈)",
+          "Presign 업로드 · 이벤트 발행",
+          "STT 워커 + Claude 요약"
+        ]
+      },
+      "right": {
+        "title": "9월",
+        "bullets": [
+          "브라우저 녹음 · SSE 진행 알림",
+          "docker-compose 통합 배포",
+          "대용량 오디오 업로드 타임아웃 수정"
+        ]
+      }
+    },
+    {
+      "type": "stats",
+      "title": "결과",
+      "items": [
+        {
+          "value": "9",
+          "label": "구성 요소",
+          "hint": "서비스 3 · 인프라 4 · 외부 2"
+        },
+        {
+          "value": "12",
+          "label": "녹음→공유 단계",
+          "hint": "그중 6단계가 비동기"
+        },
+        {
+          "value": "0",
+          "label": "수작업 회의록",
+          "hint": "Slack으로 자동 공유"
+        }
+      ]
+    },
+    {
+      "type": "end",
+      "title": "감사합니다",
+      "subtitle": "Q & A"
+    }
+  ]
+}
