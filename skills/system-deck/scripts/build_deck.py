@@ -56,7 +56,7 @@ SLIDE_FIELDS: dict[str, tuple[set, set]] = {
     "bento":    ({"cards"}, set()),
     "timeline": ({"items"}, set()),
     "scene":    (set(), {"script", "script_file", "html", "css", "libs", "steps", "caption", "fallback", "full"}),
-    "end":      (set(), {"subtitle"}),
+    "end":      (set(), {"subtitle", "asks"}),
 }
 SLIDE_TYPES = set(SLIDE_FIELDS)
 COMMON_FIELDS = {"type", "id", "title", "notes", "transition", "fx"}
@@ -76,6 +76,16 @@ BASE_DIR = Path(".")                  # build() 가 deck.json 위치로 설정�
 
 # 텍스트 길이 한계 (공백 포함, 마크업 제외). 넘으면 린트 경고.
 LIMITS = {"title": 28, "title_slide": 40, "bullet": 45, "card_body": 45, "detail": 45, "label": 40}
+
+# 주제형 제목(슬라이드가 무슨 주제인지만 말하고 결론은 없는 제목). 주장형으로 바꾸라고 경고한다.
+TOPIC_TITLES = {
+    "개요", "소개", "배경", "목차", "문제", "문제점", "왜 만들었나", "목표", "아키텍처", "시스템 아키텍처",
+    "전체 구성", "구성", "시스템 구성", "구조", "기술 스택", "요청 흐름", "흐름", "데이터 흐름", "주요 기능",
+    "핵심 기능", "기능", "구현", "구현 과정", "구현 타임라인", "타임라인", "일정", "결과", "성과", "효과",
+    "지표", "결론", "정리", "요약", "향후 계획", "향후 과제", "남은 과제", "다음 단계", "질의응답", "감사합니다",
+}
+# 주장형 제목을 요구하지 않는 타입 (장 구분·표지·인용·마무리)
+TITLE_EXEMPT = {"title", "section", "statement", "quote", "end"}
 
 
 class DeckError(Exception):
@@ -148,6 +158,10 @@ def validate_slide(i: int, s: dict) -> list[str]:
         errs.append(f"{p}: transition 은 {' | '.join(sorted(TRANSITIONS))}")
     if s.get("fx") and s["fx"] not in FX:
         errs.append(f"{p}: fx 는 {' | '.join(sorted(FX))}")
+    if t == "end" and "asks" in s:
+        a = s["asks"]
+        if not (isinstance(a, list) and 1 <= len(a) <= 3 and all(isinstance(x, str) and x.strip() for x in a)):
+            errs.append(f"{p}: asks 는 문자열 1~3개 목록이어야 합니다")
 
     def items(key, lo, hi):
         v = s.get(key)
@@ -266,6 +280,16 @@ def lint(deck: dict) -> list[str]:
                 w.append(f"{p}: {where} {len(plain(text))}자 > {limit}자: \"{plain(text)[:24]}…\"")
 
         long(s.get("title"), LIMITS["title_slide"] if t == "title" else LIMITS["title"], "제목")
+        if t not in TITLE_EXEMPT and s.get("title"):
+            tt = re.sub(r"[\s.!?·:]+$", "", plain(s["title"])).strip()
+            if tt in TOPIC_TITLES or (len(tt.split()) <= 1 and len(tt) <= 8):
+                w.append(f"{p}: 제목 \"{tt}\" 이 주제형입니다 — 이 장의 결론을 한 문장으로 (예: \"무거운 처리는 요청 경로 밖으로\")")
+        if t == "end":
+            asks = s.get("asks")
+            if not asks:
+                w.append(f"{p}: asks(청중에게 요청할 행동·다음 단계 1~3개) 없음 — 마지막 장은 요청으로 끝낸다")
+            for a in asks or []:
+                long(a, LIMITS["bullet"], "요청")
         for b in s.get("bullets") or []:
             long(b.get("text") if isinstance(b, dict) else b, LIMITS["bullet"], "불릿")
         for c in s.get("cards") or []:
@@ -671,8 +695,15 @@ def slide_html(i: int, s: dict, model: dict, deck: dict) -> tuple[str, int]:
         body = (f'<div class="sec"><div class="sec-no">{esc(s.get("no", ""))}</div><h1 class="words">{words(title)}</h1>'
                 f'<p class="sub">{md_inline(s.get("subtitle", ""))}</p></div>')
     elif t == "end":
-        body = (f'<div class="sec end"><h1 class="words">{words(title or "감사합니다")}</h1>'
-                f'<p class="sub">{md_inline(s.get("subtitle", "Q & A"))}</p></div>')
+        asks = s.get("asks") or []
+        if asks:
+            lis = "".join(f'<li class="frag"><span>{md_inline(a)}</span></li>' for a in asks)
+            steps = len(asks)
+            body = (f'<div class="sec end has-asks"><div class="kicker">{esc(s.get("subtitle") or "요청 사항")}</div>'
+                    f'<h1 class="words">{words(title or "함께 정해 주세요")}</h1><ol class="asks">{lis}</ol></div>')
+        else:
+            body = (f'<div class="sec end"><h1 class="words">{words(title or "감사합니다")}</h1>'
+                    f'<p class="sub">{md_inline(s.get("subtitle", "Q & A"))}</p></div>')
     elif t == "statement":
         kick = f'<div class="kicker">{esc(s["kicker"])}</div>' if s.get("kicker") else ""
         sub = f'<p class="sub">{md_inline(s["subtitle"])}</p>' if s.get("subtitle") else ""

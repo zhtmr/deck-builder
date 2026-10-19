@@ -13,7 +13,7 @@
     },
     {
       "type": "bullets",
-      "title": "왜 만들었나",
+      "title": "회의록 작성에 매번 1시간 넘게 들었다",
       "bullets": [
         "주 1회 2시간 회의, 회의록 작성에 **매번 1시간 이상** 소요",
         "외부 SaaS는 사내 데이터 반출 이슈 — **직접 구현**으로 결정",
@@ -35,7 +35,7 @@
     },
     {
       "type": "topology",
-      "title": "전체 구성",
+      "title": "무거운 처리는 요청 경로 밖으로 뺐다",
       "flow": "record-to-minutes",
       "caption": "점선은 Kafka 비동기 구간 — 무거운 처리를 요청 경로에서 분리했습니다.",
       "notes": "패킷이 흐르는 순서대로 한 바퀴 설명. 비동기 구간 강조."
@@ -43,23 +43,24 @@
     {
       "type": "flow",
       "flow": "record-to-minutes",
-      "title": "요청 흐름 따라가기",
+      "title": "녹음은 12단계를 거쳐 회의록이 된다",
       "notes": "→ 키로 한 단계씩. 3번(직접 업로드)과 4번(비동기 분리)에서 멈춰 설계 이유 설명."
     },
     {
       "type": "topology",
-      "title": "STT 워커 구간",
+      "title": "워커는 GPU 서버만 늘리면 확장된다",
       "focus": [
         "kafka",
         "stt",
         "minio",
         "claude"
       ],
-      "caption": "워커는 상태 없이 이벤트만 처리하므로 GPU 서버를 늘리면 수평 확장됩니다."
+      "caption": "워커는 상태 없이 이벤트만 처리하므로 GPU 서버를 늘리면 수평 확장됩니다.",
+      "notes": "결정 1: 무거운 STT 를 워커로 분리한 이유. 상태가 없으니 서버만 늘리면 된다."
     },
     {
       "type": "code",
-      "title": "업로드 완료 → 이벤트 발행",
+      "title": "오디오는 API 서버를 거치지 않는다",
       "file": "api-server/.../upload/UploadController.java",
       "lang": "java",
       "start_line": 1,
@@ -73,7 +74,8 @@
         "오디오 바이트는 API 서버를 **통과하지 않음**",
         "완료 신호만 받아 `stt.requested` 발행",
         "요청은 즉시 반환 — 처리 진행은 SSE로 통지"
-      ]
+      ],
+      "notes": "결정 2: Presigned URL 로 직접 업로드. API 서버는 완료 신호만 받아 이벤트를 발행한다."
     },
     {
       "type": "section",
@@ -83,7 +85,8 @@
     },
     {
       "type": "split",
-      "title": "구현 타임라인",
+      "title": "두 달 만에 녹음부터 공유까지 이었다",
+      "notes": "8월에 핵심 파이프라인, 9월에 녹음·알림·배포와 안정화.",
       "left": {
         "title": "8월",
         "bullets": [
@@ -103,29 +106,38 @@
     },
     {
       "type": "stats",
-      "title": "결과",
+      "title": "회의록을 손으로 쓰는 일이 사라졌다",
+      "notes": "숫자는 모두 시스템 모델에서 센 값. 회의록은 슬랙으로 자동 공유된다.",
       "items": [
         {
           "value": "9",
           "label": "구성 요소",
-          "hint": "서비스 3 · 인프라 4 · 외부 2"
+          "hint": "서비스 3 · 인프라 4 · 외부 2",
+          "source": "system-model.json nodes"
         },
         {
           "value": "12",
           "label": "녹음→공유 단계",
-          "hint": "그중 6단계가 비동기"
+          "hint": "그중 6단계가 비동기",
+          "source": "system-model.json flows.record-to-minutes"
         },
         {
           "value": "0",
           "label": "수작업 회의록",
-          "hint": "Slack으로 자동 공유"
+          "hint": "Slack으로 자동 공유",
+          "source": "system-model.json edge → slack"
         }
       ]
     },
     {
       "type": "end",
-      "title": "감사합니다",
-      "subtitle": "Q & A"
+      "title": "다음 정기 회의에 시범 적용해 주세요",
+      "subtitle": "요청 사항",
+      "asks": [
+        "다음 주 정기 회의 녹음 1회 시범 적용",
+        "회의록을 받을 슬랙 채널 지정"
+      ],
+      "notes": "요청 두 가지를 말하고 질문을 받는다."
     }
   ]
 }

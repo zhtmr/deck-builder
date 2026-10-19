@@ -86,10 +86,43 @@ class LintTest(unittest.TestCase):
         self.assertIn("[확인 필요]", w)
         self.assertIn("노트", w)
 
+    def test_topic_title(self):
+        w = "\n".join(bd.lint(deck(
+            {"type": "topology", "title": "전체 구성", "notes": "n"},
+            {"type": "stats", "title": "결과", "items": [{"value": "1", "label": "b", "source": "s"}], "notes": "n"},
+            {"type": "bullets", "title": "아키텍처", "bullets": ["x"], "notes": "n"})))
+        self.assertEqual(w.count("주제형"), 3)
+
+    def test_claim_title_and_exempt_types_pass(self):
+        w = "\n".join(bd.lint(deck(
+            {"type": "topology", "title": "무거운 처리는 요청 경로 밖으로 뺐다", "notes": "n"},
+            {"type": "section", "title": "아키텍처"},
+            {"type": "statement", "text": "x", "notes": "n"})))
+        self.assertNotIn("주제형", w)
+
+    def test_end_without_asks_warns(self):
+        self.assertIn("asks", "\n".join(bd.lint(deck({"type": "end", "title": "감사합니다"}))))
+        self.assertNotIn("asks", "\n".join(bd.lint(deck({"type": "end", "title": "승인해 주세요", "asks": ["예산 승인"]}))))
+
+    def test_end_asks_validation(self):
+        self.assertTrue(any("asks" in e for e in errs({"type": "end", "asks": []})))
+        self.assertTrue(any("asks" in e for e in errs({"type": "end", "asks": ["a", "b", "c", "d"]})))
+        self.assertTrue(any("asks" in e for e in errs({"type": "end", "asks": [1]})))
+        self.assertEqual(errs({"type": "end", "asks": ["a"]}), [])
+
 
 class RenderTest(unittest.TestCase):
     def render(self, s):
         return bd.slide_html(0, s, MODEL, deck(s))
+
+    def test_end_asks_render(self):
+        h, steps = self.render({"type": "end", "title": "승인해 주세요", "asks": ["예산 승인", "인력 1명"]})
+        self.assertEqual(steps, 2)
+        self.assertIn('class="asks"', h)
+        self.assertIn("요청 사항", h)
+        h, steps = self.render({"type": "end"})
+        self.assertEqual(steps, 0)
+        self.assertIn("감사합니다", h)
 
     def test_count_html(self):
         self.assertIn('data-to="1600000.0"', bd.count_html("1,600,000 req/s"))

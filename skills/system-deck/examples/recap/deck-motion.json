@@ -10,7 +10,7 @@
     { "type": "title", "notes": "신규 슬라이드 타입을 한 번에 보여 주는 데모 장표예요. 수치는 모두 예시입니다." },
     {
       "type": "image",
-      "title": "운영 화면에서 확인한 결과",
+      "title": "대시보드로 세 가지를 바로 확인해요",
       "src": "assets/dashboard.svg",
       "alt": "인증 게이트웨이 대시보드 예시 화면",
       "caption": "→ 키마다 확인할 영역이 하나씩 강조돼요",
@@ -23,7 +23,7 @@
     },
     {
       "type": "terminal",
-      "title": "배포 전 점검 결과",
+      "title": "차단 항목 없이 배포할 수 있어요",
       "window_title": "preflight — zsh",
       "command": "npm run preflight",
       "items": [
@@ -46,7 +46,7 @@
     },
     {
       "type": "bento",
-      "title": "핵심 효과 네 가지",
+      "title": "빨라지고, 안전하고, 싸졌어요",
       "cards": [
         { "icon": "⚡", "title": "빠른 응답", "body": "검증을 엣지에서 처리해 왕복을 줄여요" },
         { "icon": "🔒", "title": "안전한 전환", "body": "구/신 방식을 병행해 무중단으로 옮겨요" },
@@ -71,7 +71,7 @@
     },
     {
       "type": "code",
-      "title": "리팩터링 전후를 한 화면에서",
+      "title": "캐시 한 겹으로 검증 비용을 줄였어요",
       "file": "auth/verify.ts",
       "lang": "ts",
       "magic": [
@@ -105,6 +105,6 @@
       ],
       "notes": "기간별로 점이 채워지며 진행됩니다."
     },
-    { "type": "end", "title": "감사합니다", "subtitle": "Q & A" }
+    { "type": "end", "title": "다음 분기에 레거시 세션을 걷어내요", "subtitle": "다음 단계", "asks": ["남은 서비스 두 곳을 토큰 방식으로 전환", "세션 저장소 인스턴스 반납"], "notes": "asks 를 주면 마지막 장이 요청 목록으로 바뀌어요." }
   ]
 }

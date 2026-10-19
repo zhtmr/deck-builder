@@ -91,10 +91,10 @@ deck-builder/
 ├─ agents/
 │  ├─ system-explorer.md          # 코드·설정 → system-model.json (노드/간선/흐름 + 파일:라인 근거)
 │  ├─ workflow-historian.md       # git 이력·문서 → story.json (문제·결정·타임라인·지표 + 출처)
-│  └─ deck-reviewer.md            # 완성 장표의 사실 문장을 원문과 독립 대조
+│  └─ deck-reviewer.md            # 완성 장표의 사실 문장을 원문과 독립 대조 + 제목 흐름 점검
 └─ skills/system-deck/
    ├─ SKILL.md                    # 7단계 오케스트레이션
-   ├─ references/                 # 모델·장표 스키마, 발표 구성·문장 규칙
+   ├─ references/                 # 모델·장표 스키마, 청중별 스토리 프레임·제목·문장 규칙
    ├─ scripts/
    │  ├─ scan_repo.py             # 결정적 1차 정찰 (Spring/FastAPI/Express/compose/k8s/git)
    │  ├─ ingest.py                # 문서(HWPX/PDF/PPTX/DOCX/MD) → source.md + 표 JSON
@@ -107,13 +107,13 @@ deck-builder/
 
 ## 동작 흐름
 
-1. 발표 맥락(청중·시간·강조점·테마) 확정 — 빠진 것만 질문
+1. 발표 맥락(청중·원하는 행동·시간·강조점) 확정 — 빠진 것만 질문
 2. `scan_repo.py` 로 진입점·연동·설정·배포·git 이력 1차 정찰
 3. `system-explorer` 와 `workflow-historian` 병렬 실행
-4. 스키마와 구성 규칙에 맞춰 `deck.json` 작성
+4. 핵심 메시지 한 문장 → 청중별 프레임 선택 → 주장형 제목 목록(`outline.md`) → 헤드라인 테스트 → **사용자 확인** → `deck.json` 작성
 5. 빌드 → 헤드리스 스크린샷을 직접 보고 겹침·잘림 수정 (최대 3회)
-6. `deck-reviewer` 가 근거 없는 주장·코드 불일치 검출 → 수정
-7. HTML(+PDF) 전달, `[확인 필요]` 목록 보고
+6. `deck-reviewer` 가 근거 없는 주장·코드 불일치와 제목 흐름 끊김 검출 → 수정
+7. HTML(+PDF) 전달, 핵심 메시지와 `[확인 필요]` 목록 보고
 
 ## 문서도 입력으로
 
@@ -135,7 +135,7 @@ python skills/system-deck/scripts/ingest.py 기획서.hwpx -o .deck      # 변�
 
 ## 슬라이드 타입
 
-`title` · `section` · `bullets` · `topology`(자동 순환 흐름, 포커스, 부분집합) · `flow`(한 단계씩 패킷 이동 + 단계 패널) · `code`(라인 강조 / `walk` 단계 포커스 / `magic` 줄 모핑) · `split` · `stats`(숫자 카운트업 + 비교 막대) · `terminal`(타이핑 + 진행 막대 + `[OK]` 배지) · `bento` · `timeline` · `image`(스크린샷 + 단계별 하이라이트 박스) · `statement` · `quote` · `scene`(GSAP · Canvas · SVG · WebGL · Three.js 로 직접 그리는 장면) · `end`
+`title` · `section` · `bullets` · `topology`(자동 순환 흐름, 포커스, 부분집합) · `flow`(한 단계씩 패킷 이동 + 단계 패널) · `code`(라인 강조 / `walk` 단계 포커스 / `magic` 줄 모핑) · `split` · `stats`(숫자 카운트업 + 비교 막대) · `terminal`(타이핑 + 진행 막대 + `[OK]` 배지) · `bento` · `timeline` · `image`(스크린샷 + 단계별 하이라이트 박스) · `statement` · `quote` · `scene`(GSAP · Canvas · SVG · WebGL · Three.js 로 직접 그리는 장면) · `end`(`asks` 로 요청·다음 행동 목록)
 자세한 필드는 `skills/system-deck/references/deck-schema.md`. 데모: `skills/system-deck/examples/recap/deck-motion.html`, `deck-scene.html`(scene 예시 4종).
 
 ## 모션

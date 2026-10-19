@@ -13,6 +13,7 @@ description: 구현한 시스템(저장소)에 대한 발표 장표를 만들 �
   scan.json          # 1차 정찰 (scan_repo.py, 결정적)
   system-model.json  # 노드·간선·흐름 + 근거 (system-explorer)
   story.json         # 문제·결정·타임라인·지표 + 출처 (workflow-historian)
+  outline.md         # 핵심 메시지 + 슬라이드 제목(주장 문장) 목록 (이 스킬이 작성, 사용자 승인)
   deck.json          # 슬라이드 구성 (이 스킬이 작성)
   out/deck.html, out/shots/*.png, out/deck.pdf
 ```
@@ -25,15 +26,18 @@ description: 구현한 시스템(저장소)에 대한 발표 장표를 만들 �
 ## 1단계 — 발표 맥락 확정
 
 사용자 입력에서 아래를 뽑는다. **빠진 것만** AskUserQuestion 한 번으로 묻는다(최대 4문항). 이미 답이 있으면 묻지 않는다.
+묻는 우선순위는 청중 → 원하는 행동 → 발표 시간 → 강조점이다. 테마는 묻지 않고 청중으로 정한다.
 
 | 항목 | 기본값 | 장표에 미치는 영향 |
 |---|---|---|
-| 청중 | 사내 비개발 직군 + 경영진 | 용어 수준, 코드 슬라이드 개수 |
-| 발표 시간 | 10분 | 슬라이드 수 (분당 1장 내외) |
-| 강조점 | 아키텍처와 요청 흐름 | 흐름(flow) 슬라이드 선택 |
-| 테마 | `aurora` | `aurora` / `dark` / `light` / `toss` |
+| 청중 | 사내 비개발 직군 + 경영진 | 스토리 프레임(A~D), 용어 수준, 코드 슬라이드 개수 |
+| 원하는 행동 | 없음 — 꼭 묻는다 | 핵심 메시지와 마지막 장(`end` + `asks`). 예: 승인, 설계 합의, 도입 결정, 피드백 |
+| 발표 시간 | 10분 | 슬라이드 수 |
+| 강조점 | 프레임이 정하는 순서 | 흐름(flow)·결정 슬라이드 선택 |
+| 테마 | 청중이 경영진·비개발이면 `toss`, 개발자면 `aurora` | `aurora` / `dark` / `light` / `toss` |
 
-청중이 비개발자 중심이면 코드 슬라이드는 0~1장, 기술 용어는 첫 등장 시 한 줄 풀이를 붙인다.
+청중이 비개발자 중심이면 코드 슬라이드는 0장, 기술 용어는 첫 등장 시 한 줄 풀이를 붙인다.
+사용자가 자리에 없어 답을 받을 수 없으면 기본값으로 진행하고, 원하는 행동은 "다음 단계 논의"로 둔 뒤 마지막 보고에 그렇게 정했다고 적는다.
 
 ## 2단계 — 1차 정찰 (결정적)
 
@@ -76,9 +80,9 @@ python3 $S/ingest.py <문서1> <문서2 | 폴더> -o <repo>/.deck
 ## 3단계 — 병렬 심층 탐색 (서브에이전트 2개를 한 메시지에서 동시에 실행)
 
 - **system-explorer** → `.deck/system-model.json`
-  프롬프트에 저장소 경로, scan.json 경로, 발표 강조점, 그리고 `references/model-schema.md` 경로를 넘긴다.
+  프롬프트에 저장소 경로, scan.json 경로, 청중, 발표 강조점, 그리고 `references/model-schema.md` 경로를 넘긴다. 청중이 비개발자면 노드 `label` 을 역할명("분석 서버")으로 쓰고 기술명은 `tech` 로 내리라고 덧붙인다.
 - **workflow-historian** → `.deck/story.json`
-  프롬프트에 저장소 경로, scan.json 경로, 발표 맥락을 넘긴다. `.deck/source.md` 가 있으면 경로를 함께 넘겨 문서 내용도 출처(`"파일명 표 N"`, `"파일명 §제목"`)로 쓰게 한다.
+  프롬프트에 저장소 경로, scan.json 경로, 발표 맥락(청중·원하는 행동 포함)을 넘긴다. `.deck/source.md` 가 있으면 경로를 함께 넘겨 문서 내용도 출처(`"파일명 표 N"`, `"파일명 §제목"`)로 쓰게 한다.
 
 둘 다 끝나면 모델을 검증한다:
 
@@ -91,22 +95,27 @@ EOF
 
 노드가 14개를 넘으면 발표용으로 과하다. 전체 토폴로지 슬라이드는 핵심 노드만(`nodes` 필드로 부분집합) 보여 주고, 세부는 `focus` 슬라이드로 나눈다.
 
-## 4단계 — 장표 구성 (`deck.json` 작성)
+## 4단계 — 스토리 설계 (`outline.md`) → 승인 → 장표 구성 (`deck.json`)
 
-`references/deck-schema.md`(슬라이드 타입·필드)와 `references/storytelling.md`(구성 규칙·문장 톤)를 읽고 작성한다.
+스토리와 디자인을 분리한다. 4-a 에서는 테마·모션·레이아웃을 생각하지 않는다.
 
-기본 뼈대 (10분 기준 9~12장):
+### 4-a. 아웃라인
 
-1. `title` — 배경에 토폴로지가 은은하게 움직인다
-2. `bullets` — 왜 만들었나 (story.problem, story.constraints)
-3. `topology` + `flow` 지정 — 전체 구성, 대표 흐름이 자동 순환 애니메이션
-4. `flow` — 대표 요청 흐름을 → 키로 한 단계씩 (가장 중요한 1~2개만)
-5. `topology` + `focus` — 설계 포인트별 확대 (story.decisions 와 짝)
-6. `code` — 결정적 코드 1~2개 (근거 파일:라인 그대로 발췌, 20줄 이하). 단계별 설명은 `walk`, 리팩터링 전후는 `magic`(줄이 미끄러지며 변형)
-7. `split` 또는 `bullets` — 구현 타임라인 (story.timeline)
-8. `stats` — 결과/지표 (story.metrics 에 출처가 있는 숫자만)
-9. `bullets` — 남은 과제
-10. `end`
+`references/storytelling.md` 를 읽고 순서대로:
+
+1. **핵심 메시지 한 문장**을 쓴다 (1절 템플릿). 안 써지면 재료가 부족한 것이다 — 3단계 결과를 다시 보거나 사용자에게 묻는다
+2. 청중으로 **프레임(A 경영진 / B 개발자 / C 과제 보고 / D 고객 / 회고)** 을 하나 고른다. 슬라이드 순서는 프레임이 정한다. 코드 구조 순서로 나열하지 않는다
+3. 슬라이드마다 **주장형 제목 + 타입 + 근거**를 한 줄씩 `.deck/outline.md` 에 쓴다 (7절 형식). 근거 열이 빈 사실 슬라이드는 만들지 않는다
+4. **헤드라인 테스트**(4절)를 돌려 통과할 때까지 고친다
+5. **사용자 확인**: 핵심 메시지와 제목 목록을 그대로 보여 주고 고칠 곳을 묻는다. 여기서 고치는 비용이 HTML 단계보다 훨씬 작다. 사용자가 자리에 없으면 승인된 것으로 보고 진행하되, 마지막 보고에 아웃라인을 함께 싣는다
+
+### 4-b. deck.json
+
+승인된 아웃라인을 `references/deck-schema.md` 에 맞춰 옮긴다. 제목은 아웃라인 그대로 쓴다(28자 넘으면 아웃라인에서 고친다).
+
+- 마지막 장은 `end` + `asks`(1단계의 원하는 행동을 1~3개 요청으로). "감사합니다"는 `subtitle` 정도로만
+- 설계 결정 장은 `story.decisions` 의 결정 하나와 짝을 짓고, 대안과 이유를 `split` 이나 발표자 노트에 남긴다
+- 세부 프레임별 타입 배치는 `storytelling.md` 2절과 9절을 따른다
 
 **모션 연출** (`references/deck-schema.md` 의 "모션" 절): 장표가 평면적으로 느껴지지 않게 아래를 쓴다. 단, 장식이 메시지를 가리면 뺀다.
 
@@ -129,7 +138,7 @@ python3 $S/build_deck.py <repo>/.deck/deck.json -o <repo>/.deck/out/deck.html
 python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/shots
 ```
 
-- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
+- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 주제형 제목, `end` 의 `asks` 없음, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
 - `problems` 가 비어 있지 않으면 고친다. `warnings` 의 CDN 로드 실패는 오프라인 환경이면 무시한다.
 - **스크린샷을 Read 로 직접 열어** topology/flow 슬라이드를 하나씩 본다. 확인 항목:
   - 간선 라벨이 노드나 다른 라벨을 가리지 않는가 → 라벨을 짧게(2~3단어), 또는 노드 수를 줄인다
@@ -140,16 +149,17 @@ python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/s
 
 ## 6단계 — 독립 사실 검증
 
-**deck-reviewer** 서브에이전트(작업 과정을 보지 않은 새 에이전트)에게 `deck.json`, `system-model.json`, `story.json`, 저장소 경로를 주고 검증시킨다. 반환된 `unsupported` 항목은 고치거나 장표에서 뺀다. 고친 뒤 5단계 빌드를 한 번 더 돌린다.
+**deck-reviewer** 서브에이전트(작업 과정을 보지 않은 새 에이전트)에게 `deck.json`, `outline.md`, `system-model.json`, `story.json`, 저장소 경로를 주고 검증시킨다. 반환된 `unsupported`·`mismatch` 항목은 고치거나 장표에서 뺀다. `story` 지적(헤드라인 흐름 끊김, 주제형 제목, 청중에 안 맞는 장)은 `outline.md` 부터 고친 뒤 `deck.json` 에 반영한다. 고친 뒤 5단계 빌드를 한 번 더 돌린다.
 
 ## 7단계 — 전달
 
 - 필요 시 PDF: `python3 $S/render_check.py <html> --pdf <repo>/.deck/out/deck.pdf`
 - 제출용 PPTX: `python3 $S/export_pptx.py <html> -o <repo>/.deck/out/deck.pptx` (`pip install python-pptx playwright`). 슬라이드마다 최종 상태 이미지와 발표자 노트가 들어가며 모션과 텍스트 편집은 되지 않는다. 사용자에게 이 한계를 한 줄로 알린다
-- 사용자에게: 결과 파일 경로, 슬라이드 수, `[확인 필요]` 목록, 발표 조작법 한 줄
+- 사용자에게: 결과 파일 경로, 핵심 메시지 한 문장, 슬라이드 수, `[확인 필요]` 목록, 발표 조작법 한 줄
   (→/Space 다음 · ← 이전 · `o` 전체 보기 · `s` 발표자 노트 · `f` 전체화면 · `t` 테마 전환 · 브라우저 인쇄로 PDF)
 - 진행 과정 요약은 하지 않는다.
 
 ## 장표 수정 요청이 왔을 때
 
 `.deck/deck.json` 이나 `system-model.json` 만 고치고 5단계부터 다시 돌린다. HTML 을 직접 손대지 않는다(다음 빌드에서 덮어써진다).
+순서·청중·핵심 메시지가 바뀌는 요청이면 `outline.md` 를 먼저 고치고 헤드라인 테스트를 다시 돌린 뒤 `deck.json` 에 반영한다.

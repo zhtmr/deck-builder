@@ -55,6 +55,13 @@ body.show-notes #notes{display:block}
 .sec-no{font-size:120px;font-weight:900;color:transparent;-webkit-text-stroke:2px var(--accent);line-height:1;margin-bottom:12px}
 .sec h1{font-size:72px;font-weight:850}
 .end{align-items:center;text-align:center;padding:0}
+.end.has-asks{align-items:flex-start;text-align:left;padding-left:24px}
+.end.has-asks h1{font-size:64px;max-width:1300px}
+.end .kicker{font-size:24px;font-weight:700;color:var(--accent);margin-bottom:18px;letter-spacing:.02em}
+.asks{margin:44px 0 0;padding:0;list-style:none;counter-reset:ask;font-size:34px;line-height:1.45;max-width:1300px}
+.asks li{counter-increment:ask;padding:16px 0 16px 72px;position:relative;border-top:1px solid var(--line)}
+.asks li::before{content:counter(ask);position:absolute;left:0;top:14px;width:48px;height:48px;border-radius:50%;
+  background:var(--accent);color:var(--bg);font-size:24px;font-weight:800;display:flex;align-items:center;justify-content:center}
 
 /* ---------- bullets / stats / split ---------- */
 .bul{list-style:none;margin:0;padding:0;font-size:32px;line-height:1.5;max-width:1300px}
@@ -420,7 +427,7 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
 <section class="slide t-scene" data-steps="4" data-tr="slide-left" data-scene="2"><h2>녹음에서 회의록까지</h2><div class="scene-wrap"><div class="scene" id="s2-scene"></div><div class="scene-fb">GSAP 를 불러오지 못했습니다 (오프라인)</div></div><p class="cap">→ 키마다 패킷이 다음 단계로 이동해요 (GSAP + SVG)</p><aside class="notes">브라우저 녹음부터 PostgreSQL 저장까지 다섯 단계를 차례로 짚습니다.</aside><div class="pg">3</div></section>
 <section class="slide t-scene full" data-steps="1" data-tr="slide-left" data-scene="3"><div class="scene-wrap"><div class="scene" id="s3-scene"><div class="ov"><div class="kicker">Canvas 2D</div><p class="statement">흩어진 목소리를<br>한 장의 회의록으로</p></div></div><div class="scene-fb">이 장면을 불러오지 못했습니다</div></div><style>#s3-scene .ov{position:absolute;left:100px;top:50%;transform:translateY(-50%);max-width:46%}</style><aside class="notes">→ 키를 누르면 흩어진 점들이 회의록 모양으로 모입니다.</aside><div class="pg">4</div></section>
 <section class="slide t-scene" data-steps="1" data-tr="slide-left" data-scene="4"><h2>3D 로 본 전체 구성</h2><div class="scene-wrap"><div class="scene" id="s4-scene"></div><div class="scene-fb">Three.js 를 불러오지 못했습니다 (오프라인)</div></div><p class="cap">→ 키: 카메라가 다가가고 대표 흐름의 패킷이 움직여요</p><aside class="notes">system-model.json 의 노드와 간선을 Three.js 로 그대로 띄웠어요.</aside><div class="pg">5</div></section>
-<section class="slide t-end" data-steps="0" data-tr="slide-left"><div class="sec end"><h1 class="words"><span class="w" style="--i:0">감사합니다</span></h1><p class="sub">scene 타입 · references/deck-schema.md 참고</p></div><aside class="notes"></aside><div class="pg">6</div></section>
+<section class="slide t-end" data-steps="2" data-tr="slide-left"><div class="sec end has-asks"><div class="kicker">다음 단계</div><h1 class="words"><span class="w" style="--i:0">scene</span> <span class="w" style="--i:1">으로</span> <span class="w" style="--i:2">표현을</span> <span class="w" style="--i:3">넓혀</span> <span class="w" style="--i:4">보세요</span></h1><ol class="asks"><li class="frag"><span>references/deck-schema.md 의 scene 절 읽기</span></li><li class="frag"><span>덱마다 scene 은 1~2장만</span></li></ol></div><aside class="notes"></aside><div class="pg">6</div></section>
 </div>
 <div id="progress"></div>
 <div id="notes"></div>

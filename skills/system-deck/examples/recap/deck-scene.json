@@ -47,6 +47,6 @@
       "fallback": "Three.js 를 불러오지 못했습니다 (오프라인)",
       "notes": "system-model.json 의 노드와 간선을 Three.js 로 그대로 띄웠어요."
     },
-    { "type": "end", "subtitle": "scene 타입 · references/deck-schema.md 참고" }
+    { "type": "end", "title": "scene 으로 표현을 넓혀 보세요", "subtitle": "다음 단계", "asks": ["references/deck-schema.md 의 scene 절 읽기", "덱마다 scene 은 1~2장만"] }
   ]
 }

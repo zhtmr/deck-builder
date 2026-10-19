@@ -13,6 +13,7 @@
 ```
 
 모든 슬라이드 공통: `type`, `title`, `notes`(발표자 노트).
+`title` 은 주장형 한 문장(`storytelling.md` 3절). `title`·`section`·`statement`·`quote`·`end` 를 뺀 타입에서 "전체 구성", "결과" 같은 주제형이나 한 단어 제목이면 린트가 경고한다.
 텍스트 필드는 `**굵게**`(포인트 색), `` `코드` `` 만 지원한다.
 
 | type | 필드 | 스텝(→ 키) | 쓰임 |
@@ -32,7 +33,7 @@
 | `statement` | `text`, `kicker`, `subtitle` | 없음 | 핵심 메시지 한 문장 (단어 단위로 등장) |
 | `quote` | `quote`, `by` | 없음 | 인용·원칙 |
 | `scene` | `script_file`(또는 `script`), `libs`, `steps`, `html`, `css`, `full`, `caption`, `fallback` | `steps` 값 | GSAP·Canvas·SVG·WebGL·Three.js 로 직접 그리는 장면 (아래 "scene") |
-| `end` | `title`, `subtitle` | 없음 | 마지막 장 |
+| `end` | `title`, `subtitle`, `asks`(요청·다음 행동 문자열 1~3개) | `asks` 수 | 마지막 장. `asks` 를 주면 `subtitle` 이 작은 머리글(기본 "요청 사항")이 되고 요청이 번호 목록으로 하나씩 나타난다. 없으면 "감사합니다 / Q & A" (린트 경고) |
 
 공통 필드: `transition`, `fx` (아래 "모션"). 알 수 없는 필드는 린트 경고로 알려 준다(오타 방지).
 
