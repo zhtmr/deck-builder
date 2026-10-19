@@ -334,6 +334,20 @@ body.overview #overview{display:grid}
 .slide.active .shot-in{animation:shotIn .9s cubic-bezier(.22,1,.36,1) both}
 @keyframes shotIn{from{opacity:0;transform:translateY(26px) scale(.965)}to{opacity:1;transform:none}}
 
+/* ---------- scene: 작성자 스크립트로 그리는 장면 (GSAP · Canvas · SVG · WebGL · Three.js) ---------- */
+.t-scene:not(.full){display:flex;flex-direction:column}
+.scene-wrap{position:relative;flex:1;min-height:0}
+.t-scene:has(.cap) .scene-wrap{margin-bottom:44px}
+.t-scene .scene{position:absolute;inset:0}
+.scene > svg{width:100%;height:100%;overflow:visible}
+.scene-cv{position:absolute;inset:0;width:100%;height:100%;display:block}
+.t-scene.full .scene-wrap{position:absolute!important;inset:0;z-index:0;margin:0}
+.t-scene.full h2{text-shadow:0 2px 24px var(--bg)}
+.scene-fb{position:absolute;inset:0;display:none;place-items:center;text-align:center;padding:40px;font-size:24px;color:var(--muted);
+  border:1px dashed var(--edge);border-radius:18px}
+.scene-wrap.err .scene-fb{display:grid}
+.scene-wrap.err .scene{display:none}
+
 /* ---------- aurora 테마: 검은 배경 · 천천히 흐르는 블러 그라데이션 · 가벼운 큰 타이포 · 유리 카드 ---------- */
 html[data-theme="aurora"]{
   --bg:#000; --bg2:#02040a; --panel:rgba(255,255,255,.035); --fg:#f4f6fb; --muted:#8d97ad; --edge:#3a465e; --line:rgba(255,255,255,.1);
@@ -406,18 +420,19 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
 <div id="progress"></div>
 <div id="notes"></div>
 <div id="overview"></div>
+{{SCENES}}
 <script>
 (() => {
   const stage = document.getElementById('stage');
   const slides = [...stage.querySelectorAll('.slide')];
   const prog = document.getElementById('progress');
   const notesBox = document.getElementById('notes');
-  let cur = 0, step = 0, autoTimer = null;
+  let cur = 0, step = 0, autoTimer = null, stageScale = 1;
   const packets = new Set();
 
   // ---------- 화면 맞춤 ----------
   function fit(){
-    const s = Math.min(innerWidth/1600, innerHeight/900);
+    const s = stageScale = Math.min(innerWidth/1600, innerHeight/900);
     stage.style.transform = `scale(${s})`;
   }
   addEventListener('resize', fit); fit();
@@ -501,6 +516,7 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
         d.setAttribute('cx', p.x); d.setAttribute('cy', p.y);
       });
     }
+    sceneFrame(now);
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
@@ -647,6 +663,113 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
     s.querySelectorAll('.code-pts li').forEach((li, j) => { li.classList.toggle('done', j < k); li.classList.toggle('on', j === k); });
   }
 
+  // ---------- scene: 작성자 스크립트 장면 (GSAP · Canvas · SVG · WebGL · Three.js) ----------
+  // 처음 보여 줄 때 초기화한다(라이브러리 로드 시간, WebGL 컨텍스트 수 제한). 슬라이드를 떠나면 루프가 멈추고
+  // enter/step 안에서 만든 GSAP 애니메이션은 되돌린다(다시 들어오면 enter 부터 새로).
+  const SCENES = window.__SCENES || {}, libCache = {}, STILL_T = 1.5;
+  let liveScene = null;
+  function loadLib(L){
+    if (!libCache[L.url]){
+      const p = L.module ? import(L.url) : new Promise((ok, no) => {
+        const sc = document.createElement('script'); sc.src = L.url;
+        sc.onload = () => ok(L.global ? window[L.global] : true); sc.onerror = no;
+        document.head.appendChild(sc);
+      });
+      libCache[L.url] = p.catch(() => { throw new Error('라이브러리를 불러오지 못했습니다: ' + L.name); });
+    }
+    return libCache[L.url];
+  }
+  function sizeCanvas(c, ctx){
+    const pr = ctx.pixelRatio();
+    c.width = Math.max(1, Math.round(ctx.width * pr)); c.height = Math.max(1, Math.round(ctx.height * pr));
+    if (c._g2d) c._g2d.setTransform(pr, 0, 0, pr, 0, 0);   // 2D 는 무대 좌표(CSS px)로 그리면 된다
+  }
+  function sceneInit(s){
+    const def = SCENES[s.dataset.scene], host = s.querySelector('.scene'), wrap = s.querySelector('.scene-wrap');
+    const sc = {s, host, loops: new Set(), canvases: [], api: {}, entered: false, t0: 0, last: 0, g: null};
+    const ctx = sc.ctx = {
+      el: host, slide: s, lib: {}, model: window.__MODEL, reduced, still: false,
+      get width(){ return host.clientWidth; }, get height(){ return host.clientHeight; },
+      pixelRatio: () => Math.min(2, (devicePixelRatio || 1) * stageScale),
+      theme(){
+        const cs = getComputedStyle(s), v = k => cs.getPropertyValue(k).trim();
+        return {name: document.documentElement.dataset.theme, accent: v('--accent'), fg: v('--fg'), muted: v('--muted'),
+                bg: v('--bg'), panel: v('--panel'), line: v('--line'), edge: v('--edge')};
+      },
+      kindColor: k => (window.__KINDS || {})[k] || (window.__KINDS || {}).service,
+      canvas(){ const c = document.createElement('canvas'); c.className = 'scene-cv'; host.prepend(c); sc.canvases.push(c); sizeCanvas(c, ctx); return c; },
+      canvas2d(){ const c = ctx.canvas(); c._g2d = c.getContext('2d'); sizeCanvas(c, ctx); return c._g2d; },
+      loop(fn){ sc.loops.add(fn); return () => sc.loops.delete(fn); },
+    };
+    return (async () => {
+      try {
+        if (!def) throw new Error('장면 스크립트가 없습니다');
+        for (const L of def.libs) ctx.lib[L.name] = await loadLib(L);
+        sc.api = (await def.run(ctx)) || {};
+        s._sc = sc;
+        return sc;
+      } catch (e){
+        wrap.classList.add('err');
+        (/불러오지 못했/.test(e.message) ? console.warn : console.error)(`[scene ${+s.dataset.scene + 1}]`, e);
+        return null;
+      }
+    })();
+  }
+  function sceneCall(sc, fn, ...args){
+    const f = sc.api[fn]; if (!f) return;
+    const run = () => { try { f(...args); } catch (e){ console.error(`[scene ${+sc.s.dataset.scene + 1}] ${fn}`, e); } };
+    const G = window.gsap;
+    if (G && G.context){ sc.g = sc.g || G.context(() => {}, sc.host); sc.g.add(run); } else run();
+  }
+  function sceneShow(s, k, still){
+    s._scene = s._scene || sceneInit(s);
+    liveScene = s;
+    return s._scene.then(sc => {
+      if (!sc || liveScene !== s) return;
+      sc.ctx.still = still;
+      if (!sc.entered){
+        if (sc.g){ sc.g.revert(); sc.g = null; }
+        sc.entered = true; sc.t0 = sc.last = performance.now(); sceneCall(sc, 'enter');
+      }
+      sceneCall(sc, 'step', k, still);
+      if (still){
+        // 정지 화면: 진행 중인 최상위 GSAP 애니메이션을 끝 상태로, 루프는 한 프레임만
+        const G = window.gsap;
+        if (sc.g && G) sc.g.data.forEach(a => { if (a.parent === G.globalTimeline && a.paused && !a.paused()) a.progress(1); });
+        stillFrame(sc);
+      }
+    });
+  }
+  // 루프가 돌지 않는 상태(정지 화면, 비활성 슬라이드)에서 한 프레임만 다시 그린다
+  function stillFrame(sc){ sc.loops.forEach(fn => { try { fn(STILL_T, 0); } catch (e){ console.error(e); } }); }
+  function sceneHide(s){
+    if (!s._scene) return;
+    s._scene.then(sc => {
+      if (!sc || !sc.entered) return;
+      sc.entered = false; sceneCall(sc, 'leave');
+      // 나가는 전환이 끝난 뒤 되돌린다 (전환 중에 장면이 튀지 않게)
+      setTimeout(() => { if (!sc.entered && sc.g){ sc.g.revert(); sc.g = null; } }, 800);
+    });
+  }
+  function sceneFrame(now){
+    const sc = liveScene && liveScene._sc;
+    if (!sc || !sc.entered || sc.ctx.still || document.hidden) { if (sc) sc.last = now; return; }
+    const t = (now - sc.t0) / 1000, dt = Math.min(0.1, (now - sc.last) / 1000); sc.last = now;
+    sc.loops.forEach(fn => { try { fn(t, dt); } catch (e){ sc.loops.delete(fn); console.error(`[scene ${+sc.s.dataset.scene + 1}] loop`, e); } });
+  }
+  addEventListener('resize', () => slides.forEach(s => {
+    const sc = s._sc; if (!sc) return;
+    sc.canvases.forEach(c => sizeCanvas(c, sc.ctx));
+    sceneCall(sc, 'resize', sc.ctx.width, sc.ctx.height, sc.ctx.pixelRatio());
+    if (sc.ctx.still || !sc.entered) stillFrame(sc);
+  }));
+  function sceneReady(){
+    const s = slides[cur];
+    if (!s._scene) return Promise.resolve(true);
+    const done = s._scene.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(true)))));
+    return Promise.race([done, new Promise(r => setTimeout(() => r(false), 8000))]);
+  }
+
   // ---------- 오버뷰 (o) ----------
   const ov = document.getElementById('overview');
   function openOverview(){
@@ -657,6 +780,8 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
       c.querySelectorAll('.frag').forEach(f => f.classList.add('on'));
       c.querySelectorAll('.stat .num').forEach(el => { el.textContent = fmtNum(el, +el.dataset.to); });
       c.querySelectorAll('.cmd').forEach(x => { x.textContent = x.dataset.full; });
+      const cvs = c.querySelectorAll('canvas');   // 복제본 캔버스는 비어 있으므로 현재 픽셀을 옮겨 그린다
+      s.querySelectorAll('canvas').forEach((src, j) => { try { cvs[j].getContext('2d').drawImage(src, 0, 0); } catch (e){} });
       const no = document.createElement('b'); no.className = 'no'; no.textContent = i + 1;
       th.append(c, no); ov.appendChild(th);
       th.addEventListener('click', e => { e.stopPropagation(); closeOverview(); go(i, 0); });
@@ -681,6 +806,8 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
     if (s.dataset.flow) applyFlow(s, JSON.parse(s.dataset.flow), step, {still});
     else if (s.dataset.autoflow && !still) startAuto(s);
     applyFocus(s);
+    if (liveScene && liveScene !== s){ sceneHide(liveScene); liveScene = null; }
+    if (s.dataset.scene !== undefined) sceneShow(s, step, still);
     prog.style.width = ((cur + 1) / slides.length * 100) + '%';
     notesBox.textContent = s.querySelector('.notes')?.textContent || '';
     if (location.hash !== '#' + (cur+1)) history.replaceState(null, '', '#' + (cur+1));
@@ -712,7 +839,8 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
     else if (e.key === 'Home') go(0); else if (e.key === 'End') go(slides.length-1);
     else if (e.key === 'f') (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
     else if (e.key === 's') document.body.classList.toggle('show-notes');
-    else if (e.key === 't'){ const T = ['aurora','dark','light','toss'], h = document.documentElement; h.dataset.theme = T[(T.indexOf(h.dataset.theme)+1) % T.length]; }
+    else if (e.key === 't'){ const T = ['aurora','dark','light','toss'], h = document.documentElement; h.dataset.theme = T[(T.indexOf(h.dataset.theme)+1) % T.length];
+      slides.forEach(x => { const sc = x._sc; if (!sc) return; sceneCall(sc, 'theme', sc.ctx.theme()); if (x !== liveScene || sc.ctx.still) stillFrame(sc); }); }
   });
   addEventListener('click', e => { if (e.target.closest('a') || document.body.classList.contains('overview')) return; (e.clientX < innerWidth/3 ? prev : next)(); });
   let tx = null;
@@ -748,7 +876,7 @@ body.still .slide *, body.still .slide{animation-duration:0s!important;animation
   if (params.has('still')) document.body.classList.add('still');
   const start = parseInt((location.hash||'').slice(1)) || 1;
   go(start-1, 0);
-  window.deck = { go, next, prev, count: slides.length, steps: i => +slides[i].dataset.steps || 0 };
+  window.deck = { go, next, prev, count: slides.length, steps: i => +slides[i].dataset.steps || 0, ready: sceneReady };
 })();
 </script>
 </body>

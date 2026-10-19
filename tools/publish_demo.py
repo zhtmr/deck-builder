@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EX = ROOT / "skills" / "system-deck" / "examples" / "recap"
 BUILD = ROOT / "skills" / "system-deck" / "scripts" / "build_deck.py"
 DEMO = ROOT / "docs" / "demo"
-DECKS = ["deck-motion", "deck", "deck-toss"]
+DECKS = ["deck-motion", "deck", "deck-toss", "deck-scene"]
 
 
 def main():

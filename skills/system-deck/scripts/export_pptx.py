@@ -41,6 +41,7 @@ def main():
         n = pg.evaluate("deck.count")
         for i in range(n):
             pg.evaluate(f"deck.go({i}, deck.steps({i}), true)")
+            pg.evaluate("deck.ready ? deck.ready() : true")   # scene 슬라이드: 라이브러리 로드·초기화 대기
             pg.wait_for_timeout(250)
             img = Path(tmp) / f"s{i:02d}.png"
             pg.screenshot(path=str(img))

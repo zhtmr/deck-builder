@@ -1,0 +1,52 @@
+{
+  "title": "Recap 장면 슬라이드 예시",
+  "subtitle": "GSAP · Canvas · SVG · WebGL · Three.js 를 쓰는 scene 타입",
+  "eyebrow": "deck-builder scene 데모",
+  "author": "데모",
+  "date": "2026.10",
+  "theme": "aurora",
+  "model": "system-model.json",
+  "slides": [
+    { "type": "title", "notes": "scene 타입으로 웹 그래픽 기술을 장표에 넣는 예시입니다." },
+    {
+      "type": "scene",
+      "title": "WebGL 셰이더 배경",
+      "full": true,
+      "script_file": "scenes/aurora-webgl.js",
+      "html": "<div class=\"hero\"><div class=\"kicker\">WebGL</div><p class=\"statement\">브라우저가 직접 그리는<br>배경과 장면</p></div>",
+      "css": ":scope .hero{position:absolute;left:100px;bottom:120px;max-width:1100px}",
+      "transition": "zoom",
+      "notes": "라이브러리 없이 프래그먼트 셰이더 하나로 그린 배경이에요. 포인트 색을 따라갑니다."
+    },
+    {
+      "type": "scene",
+      "title": "녹음에서 회의록까지",
+      "libs": ["gsap"],
+      "script_file": "scenes/pipeline-gsap.js",
+      "steps": 4,
+      "caption": "→ 키마다 패킷이 다음 단계로 이동해요 (GSAP + SVG)",
+      "fallback": "GSAP 를 불러오지 못했습니다 (오프라인)",
+      "notes": "브라우저 녹음부터 PostgreSQL 저장까지 다섯 단계를 차례로 짚습니다."
+    },
+    {
+      "type": "scene",
+      "full": true,
+      "script_file": "scenes/voices-canvas.js",
+      "steps": 1,
+      "html": "<div class=\"ov\"><div class=\"kicker\">Canvas 2D</div><p class=\"statement\">흩어진 목소리를<br>한 장의 회의록으로</p></div>",
+      "css": ":scope .ov{position:absolute;left:100px;top:50%;transform:translateY(-50%);max-width:46%}",
+      "notes": "→ 키를 누르면 흩어진 점들이 회의록 모양으로 모입니다."
+    },
+    {
+      "type": "scene",
+      "title": "3D 로 본 전체 구성",
+      "libs": ["three", "gsap"],
+      "script_file": "scenes/topology-three.js",
+      "steps": 1,
+      "caption": "→ 키: 카메라가 다가가고 대표 흐름의 패킷이 움직여요",
+      "fallback": "Three.js 를 불러오지 못했습니다 (오프라인)",
+      "notes": "system-model.json 의 노드와 간선을 Three.js 로 그대로 띄웠어요."
+    },
+    { "type": "end", "subtitle": "scene 타입 · references/deck-schema.md 참고" }
+  ]
+}

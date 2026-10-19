@@ -135,8 +135,8 @@ python skills/system-deck/scripts/ingest.py 기획서.hwpx -o .deck      # 변�
 
 ## 슬라이드 타입
 
-`title` · `section` · `bullets` · `topology`(자동 순환 흐름, 포커스, 부분집합) · `flow`(한 단계씩 패킷 이동 + 단계 패널) · `code`(라인 강조 / `walk` 단계 포커스 / `magic` 줄 모핑) · `split` · `stats`(숫자 카운트업 + 비교 막대) · `terminal`(타이핑 + 진행 막대 + `[OK]` 배지) · `bento` · `timeline` · `image`(스크린샷 + 단계별 하이라이트 박스) · `statement` · `quote` · `end`
-자세한 필드는 `skills/system-deck/references/deck-schema.md`. 데모: `skills/system-deck/examples/recap/deck-motion.html`.
+`title` · `section` · `bullets` · `topology`(자동 순환 흐름, 포커스, 부분집합) · `flow`(한 단계씩 패킷 이동 + 단계 패널) · `code`(라인 강조 / `walk` 단계 포커스 / `magic` 줄 모핑) · `split` · `stats`(숫자 카운트업 + 비교 막대) · `terminal`(타이핑 + 진행 막대 + `[OK]` 배지) · `bento` · `timeline` · `image`(스크린샷 + 단계별 하이라이트 박스) · `statement` · `quote` · `scene`(GSAP · Canvas · SVG · WebGL · Three.js 로 직접 그리는 장면) · `end`
+자세한 필드는 `skills/system-deck/references/deck-schema.md`. 데모: `skills/system-deck/examples/recap/deck-motion.html`, `deck-scene.html`(scene 예시 4종).
 
 ## 모션
 

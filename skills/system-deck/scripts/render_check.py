@@ -47,6 +47,8 @@ def main():
         for i in want:
             steps = pg.evaluate(f"deck.steps({i-1})")
             pg.evaluate(f"deck.go({i-1}, {steps}, true)")
+            if not pg.evaluate("deck.ready ? deck.ready() : true"):   # scene 슬라이드: 라이브러리 로드·초기화 대기
+                warnings.append(f"slide {i}: 장면 준비가 8초 안에 끝나지 않음")
             pg.wait_for_timeout(250)
             # 넘침 검사: 활성 슬라이드 안에서 슬라이드 경계를 벗어난 텍스트 요소
             over = pg.evaluate(
@@ -71,6 +73,8 @@ def main():
         if a.pdf:
             pg.goto(url + "?still=1")
             pg.wait_for_timeout(400)
+            # scene 장면은 한 번 보여 줘야 그려지므로 전부 거쳐 간다
+            pg.evaluate("""async () => { for (let i = 0; i < deck.count; i++){ deck.go(i, deck.steps(i), true); await deck.ready(); } deck.go(0, 0, true); }""")
             pg.emulate_media(media="print")
             pg.pdf(path=str(a.pdf), width="1600px", height="900px", print_background=True)
         b.close()

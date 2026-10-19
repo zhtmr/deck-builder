@@ -55,6 +55,7 @@ SLIDE_FIELDS: dict[str, tuple[set, set]] = {
     "terminal": ({"items"}, {"window_title", "command", "summary"}),
     "bento":    ({"cards"}, set()),
     "timeline": ({"items"}, set()),
+    "scene":    (set(), {"script", "script_file", "html", "css", "libs", "steps", "caption", "fallback", "full"}),
     "end":      (set(), {"subtitle"}),
 }
 SLIDE_TYPES = set(SLIDE_FIELDS)
@@ -65,6 +66,12 @@ STATUS = {"OK": "ok", "WARN": "warn", "FAIL": "fail"}
 THEMES = ("aurora", "dark", "light", "toss")
 ACCENTS = {"aurora": "#8ab4ff", "dark": "#7dd3fc", "light": "#2563eb", "toss": "#3182f6"}
 MAX_INLINE_BYTES = 3 * 1024 * 1024    # 이미지 한 장을 HTML 에 내장하는 한계 (넘으면 경고)
+# scene 슬라이드가 이름으로 부를 수 있는 라이브러리: (module 여부, URL, 전역 이름). 버전은 고정한다.
+LIBS = {
+    "gsap":  (False, "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js", "gsap"),
+    "three": (True,  "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js", None),
+}
+MAX_SCENE_STEPS = 20
 BASE_DIR = Path(".")                  # build() 가 deck.json 위치로 설정한다 (이미지 상대 경로 기준)
 
 # 텍스트 길이 한계 (공백 포함, 마크업 제외). 넘으면 린트 경고.
@@ -205,6 +212,24 @@ def validate_slide(i: int, s: dict) -> list[str]:
             a, b = walk_range(w)
             if a is None or not (start <= a <= b <= end):
                 errs.append(f"{p}: walk[{j}].lines 는 코드 줄 번호 범위({start}~{end}) 안의 [시작, 끝]")
+    elif t == "scene":
+        if bool(s.get("script")) == bool(s.get("script_file")):
+            errs.append(f"{p}: script 또는 script_file 중 정확히 하나가 필요합니다")
+        st = s.get("steps", 0)
+        if not (isinstance(st, int) and not isinstance(st, bool) and 0 <= st <= MAX_SCENE_STEPS):
+            errs.append(f"{p}: steps 는 0~{MAX_SCENE_STEPS} 정수")
+        libs = s.get("libs", [])
+        if not isinstance(libs, list):
+            errs.append(f"{p}: libs 는 목록")
+            libs = []
+        for j, L in enumerate(libs):
+            if isinstance(L, str):
+                if L not in LIBS:
+                    errs.append(f"{p}: libs[{j}] '{L}' 은 내장 라이브러리가 아닙니다 (내장: {', '.join(LIBS)}). "
+                                "그 외는 {name, url} 또는 {name, src} 로 지정")
+            elif not (isinstance(L, dict) and re.fullmatch(r"[A-Za-z_$][\w$]*", str(L.get("name", "")))
+                      and bool(L.get("url")) != bool(L.get("src"))):
+                errs.append(f"{p}: libs[{j}] 는 내장 이름 문자열이거나 {{name, url}} / {{name, src}} 객체 (name 은 JS 식별자)")
     return errs
 
 
@@ -267,6 +292,11 @@ def lint(deck: dict) -> list[str]:
             for m in s.get("marks") or []:
                 if isinstance(m, dict):
                     long(m.get("note"), 20, "하이라이트 라벨")
+        if t == "scene":
+            long(s.get("caption"), LIMITS["detail"], "캡션")
+            remote = any(isinstance(L, str) or (isinstance(L, dict) and L.get("url")) for L in s.get("libs") or [])
+            if remote and not s.get("fallback"):
+                w.append(f"{p}: CDN 라이브러리를 쓰는데 fallback(오프라인일 때 보일 문구) 없음")
         if t == "code":
             for v in ([s.get("code", "")] + [m.get("code", "") for m in (s.get("magic") or []) if isinstance(m, dict)]):
                 if len(str(v).rstrip("\n").split("\n")) > 20:
@@ -540,9 +570,41 @@ def image_src(src: str) -> str:
     return f"data:{mime};base64," + base64.b64encode(f.read_bytes()).decode("ascii")
 
 
+def js_src(src: str) -> str:
+    """로컬 JS 파일을 data URI 로 내장한다 (scene 의 libs[].src)."""
+    import base64
+    return "data:text/javascript;base64," + base64.b64encode((BASE_DIR / src).read_bytes()).decode("ascii")
+
+
+def scene_libs(s: dict) -> list[dict]:
+    out = []
+    for L in s.get("libs") or []:
+        if isinstance(L, str):
+            module, url, glob = LIBS[L]
+            out.append({"name": L, "url": url, "module": module, "global": glob})
+        else:
+            url = L["url"] if L.get("url") else js_src(L["src"])
+            out.append({"name": L["name"], "url": url, "module": bool(L.get("module")), "global": L.get("global")})
+    return out
+
+
+def scene_js(i: int, s: dict) -> str:
+    """scene 슬라이드의 사용자 스크립트를 런타임 레지스트리 항목으로 감싼다. (작성자 코드이므로 이스케이프하지 않는다)"""
+    code = s.get("script") or (BASE_DIR / s["script_file"]).read_text(encoding="utf-8-sig")
+    code = re.sub(r"</(script)", r"<\\/\1", code, flags=re.I)   # 인라인 <script> 를 조기에 닫지 않게
+    libs = json.dumps(scene_libs(s), ensure_ascii=False).replace("</", "<\\/")
+    return f"__SCENES[{i}] = {{libs: {libs}, run: async function(ctx){{\n{code}\n}}}};"
+
+
 def check_assets(deck: dict, base: Path) -> tuple[list[str], list[str]]:
     errs, warns = [], []
     for i, s in enumerate(deck.get("slides", [])):
+        if s.get("type") == "scene":
+            files = [("script_file", s.get("script_file"))] + [
+                ("libs[].src", L.get("src")) for L in s.get("libs") or [] if isinstance(L, dict)]
+            for key, f in files:
+                if f and not (base / f).is_file():
+                    errs.append(f"slides[{i}] (scene): {key} 파일 없음 '{f}' (deck.json 기준 상대 경로)")
         src = s.get("src") if s.get("type") == "image" else None
         if not src or re.match(r"^(https?:|data:)", str(src)):
             continue
@@ -769,6 +831,19 @@ def slide_html(i: int, s: dict, model: dict, deck: dict) -> tuple[str, int]:
             f'<aside class="steps"><p class="fdesc">{md_inline(s.get("description") or f.get("description", ""))}</p>'
             f'<ol>{"".join(lis)}</ol></aside></div>'
         )
+    elif t == "scene":
+        # html/css 는 작성자가 쓴 마크업이라 그대로 넣는다. css 의 :scope 는 이 장면 영역으로 바뀐다
+        host = f"{uid}-scene"
+        css = str(s.get("css", "")).replace(":scope", f"#{host}").replace("</", "<\\/")
+        full = bool(s.get("full"))
+        cls += " full" if full else ""
+        head = f"<h2>{title}</h2>" if title else ""
+        cap = f'<p class="cap">{md_inline(s["caption"])}</p>' if s.get("caption") else ""
+        fb = md_inline(s.get("fallback") or "이 장면을 불러오지 못했습니다")
+        body = (f'{head}<div class="scene-wrap"><div class="scene" id="{host}">{s.get("html", "")}</div>'
+                f'<div class="scene-fb">{fb}</div></div>{cap}{"<style>" + css + "</style>" if css else ""}')
+        steps = s.get("steps", 0)
+        data += f' data-scene="{i}"'
     tr = s.get("transition") or deck.get("transition", "slide-left")
     if s.get("fx"):
         data += f' data-fx="{esc(s["fx"])}"'
@@ -831,6 +906,15 @@ def build(deck_path: Path, out: Path | None, validate_only: bool, strict: bool =
         return 0
 
     slides = [slide_html(i, s, model, deck)[0] for i, s in enumerate(deck["slides"])]
+    scenes = [scene_js(i, s) for i, s in enumerate(deck["slides"]) if s["type"] == "scene"]
+    scene_block = ""
+    if scenes:
+        # 장면 스크립트가 ctx.model 로 시스템 모델(노드·간선·흐름)을 읽을 수 있게 함께 싣는다
+        mjson = json.dumps({k: model.get(k) for k in ("system", "nodes", "edges", "flows")}, ensure_ascii=False)
+        kinds = json.dumps({k: v[0] for k, v in KINDS.items()})
+        scene_block = ("<script>\nconst __SCENES = window.__SCENES = {};\nwindow.__MODEL = "
+                       + mjson.replace("</", "<\\/") + ";\nwindow.__KINDS = " + kinds + ";\n"
+                       + "\n".join(scenes) + "\n</script>")
     theme = deck.get("theme", "aurora")
     if theme not in THEMES:
         raise DeckError(f"theme 은 {' | '.join(THEMES)} 중 하나여야 합니다 (현재: {theme})")
@@ -841,6 +925,7 @@ def build(deck_path: Path, out: Path | None, validate_only: bool, strict: bool =
         .replace("{{THEME}}", esc(theme))
         .replace("{{ACCENT}}", esc(accent))
         .replace("{{SLIDES}}", "\n".join(slides))
+        .replace("{{SCENES}}", scene_block)
     )
     out = out or deck_path.with_suffix(".html")
     out.parent.mkdir(parents=True, exist_ok=True)

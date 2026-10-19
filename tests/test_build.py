@@ -24,7 +24,7 @@ def errs(*slides):
 
 class ExamplesTest(unittest.TestCase):
     def test_example_decks_validate_and_build(self):
-        for name in ("deck.json", "deck-toss.json", "deck-motion.json"):
+        for name in ("deck.json", "deck-toss.json", "deck-motion.json", "deck-scene.json"):
             with self.subTest(name):
                 d = json.loads((EX / name).read_text(encoding="utf-8"))
                 self.assertEqual(bd.validate(MODEL, d), [])
@@ -159,6 +159,40 @@ class RenderTest(unittest.TestCase):
     def test_long_stat_value_class(self):
         html, _ = self.render({"type": "stats", "items": [{"value": "1,600,000", "label": "a"}]})
         self.assertIn('class="v long"', html)
+
+    def test_scene_validation(self):
+        ok = {"type": "scene", "script": "return {}", "libs": ["gsap", {"name": "d3", "url": "https://x/d3.js"}], "steps": 3}
+        self.assertEqual(errs(ok), [])
+        self.assertTrue(errs({"type": "scene"}))                                                # 스크립트 없음
+        self.assertTrue(errs({"type": "scene", "script": "a", "script_file": "a.js"}))          # 둘 다
+        self.assertTrue(errs({"type": "scene", "script": "a", "libs": ["jquery"]}))             # 내장 아님
+        self.assertTrue(errs({"type": "scene", "script": "a", "libs": [{"name": "x-y", "url": "u"}]}))   # 식별자 아님
+        self.assertTrue(errs({"type": "scene", "script": "a", "libs": [{"name": "x", "url": "u", "src": "s"}]}))
+        self.assertTrue(errs({"type": "scene", "script": "a", "steps": 99}))
+        self.assertTrue(errs({"type": "scene", "script": "a", "steps": True}))
+
+    def test_scene_render(self):
+        s = {"type": "scene", "title": "t", "script": "return {}", "steps": 2, "full": True,
+             "html": "<div class=x></div>", "css": ":scope .x{color:red}"}
+        html, steps = self.render(s)
+        self.assertEqual(steps, 2)
+        self.assertIn('data-scene="0"', html)
+        self.assertIn("t-scene full", html)
+        self.assertIn("<div class=x></div>", html)        # 작성자 마크업은 그대로
+        self.assertIn("#s0-scene .x{color:red}", html)    # :scope 는 장면 영역으로
+
+    def test_scene_js_wraps_and_escapes(self):
+        js = bd.scene_js(3, {"type": "scene", "script": "el.innerHTML = '</script>'", "libs": ["three"]})
+        self.assertTrue(js.startswith("__SCENES[3] = "))
+        self.assertNotIn("</script", js)
+        self.assertIn('"module": true', js)
+        self.assertIn("three@", js)
+
+    def test_scene_lint_fallback(self):
+        w = "\n".join(bd.lint(deck({"type": "scene", "script": "a", "libs": ["gsap"], "notes": "n"})))
+        self.assertIn("fallback", w)
+        w = "\n".join(bd.lint(deck({"type": "scene", "script": "a", "notes": "n"})))
+        self.assertNotIn("fallback", w)
 
     def test_html_escaped(self):
         html, _ = self.render({"type": "bento", "cards": [{"title": "<script>x</script>"}, {"title": "b"}]})

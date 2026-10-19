@@ -31,6 +31,7 @@
 | `image` | `src`(필수), `alt`, `caption`, `fit`(`contain`/`cover`), `marks:[{box:[x,y,w,h], note}]` | `marks` 수 | 제품 화면·대시보드·다이어그램 캡처. `box` 는 이미지 대비 % (x+w, y+h ≤ 100). → 키마다 한 영역을 강조하고 나머지는 어두워진다 |
 | `statement` | `text`, `kicker`, `subtitle` | 없음 | 핵심 메시지 한 문장 (단어 단위로 등장) |
 | `quote` | `quote`, `by` | 없음 | 인용·원칙 |
+| `scene` | `script_file`(또는 `script`), `libs`, `steps`, `html`, `css`, `full`, `caption`, `fallback` | `steps` 값 | GSAP·Canvas·SVG·WebGL·Three.js 로 직접 그리는 장면 (아래 "scene") |
 | `end` | `title`, `subtitle` | 없음 | 마지막 장 |
 
 공통 필드: `transition`, `fx` (아래 "모션"). 알 수 없는 필드는 린트 경고로 알려 준다(오타 방지).
@@ -46,6 +47,66 @@
 "magic": [ {"code": "v1…", "note": "기존 방식"}, {"code": "v2…", "note": "교체"}, {"code": "v3…", "note": "캐시 추가"} ]
 ```
 `magic` 은 `code`/`walk` 와 함께 쓸 수 없다. 버전은 2~8개, 버전 사이 변경은 작게(한 번에 3~4줄 이내) 유지해야 모핑이 읽힌다. 12줄 이하의 짧은 코드는 큰 글씨로 표시된다.
+
+## scene — 웹 그래픽으로 직접 그리는 장면
+
+정해진 타입으로 표현하기 어려운 시각화(3D 구성도, 셰이더 배경, 파티클, 맞춤 SVG 애니메이션)를 JS 로 그린다.
+
+```jsonc
+{
+  "type": "scene",
+  "title": "3D 로 본 전체 구성",       // 선택. full 이면 장면 위에 겹쳐 표시
+  "script_file": "scenes/topo.js",     // deck.json 기준 상대 경로 (또는 짧은 코드는 "script": "...")
+  "libs": ["three", "gsap"],           // 내장: gsap(3.12.5), three(0.170.0, ES 모듈). 순서대로 로드
+  "steps": 2,                          // → 키 스텝 수 (0~20). 스크립트의 step(k) 로 전달
+  "html": "<div class=\"ov\">…</div>", // 선택. 장면 영역에 들어갈 마크업 (오버레이 글자 등)
+  "css": ":scope .ov{left:100px}",     // 선택. :scope 는 이 장면 영역으로 바뀐다
+  "full": true,                        // 선택. 여백 없이 슬라이드 전체를 장면으로
+  "caption": "…",                      // 선택. 하단 설명
+  "fallback": "Three.js 를 불러오지 못했습니다"   // 라이브러리 로드·스크립트 실패 시 보일 문구
+}
+```
+
+- 그 밖의 라이브러리: `{"name": "d3", "url": "https://…/d3.min.js", "global": "d3"}` (일반 스크립트, `global` 은 전역 이름) 또는 `"module": true` (ES 모듈). 로컬 파일은 `{"name": "x", "src": "vendor/x.js"}` 로 주면 HTML 에 내장돼 **오프라인에서도 동작**한다. CDN 라이브러리는 온라인일 때만 로드되므로 `fallback` 을 꼭 쓴다(없으면 린트 경고)
+- `html`·`css`·스크립트는 작성자 코드로 보고 이스케이프하지 않는다. 다른 출처의 문자열을 그대로 넣지 않는다
+
+### 스크립트 작성법
+
+스크립트 본문은 `async function(ctx){ … }` 안에 들어간다(최상위 `await` 가능). 슬라이드를 처음 보여 줄 때 한 번 실행되고, 생명주기 함수를 담은 객체를 `return` 한다. 모두 선택.
+
+```js
+const gsap = ctx.lib.gsap;                 // libs 의 name 으로 접근 (three 는 모듈 네임스페이스 = THREE)
+const g = ctx.canvas2d();                  // 고해상도 2D 컨텍스트. 좌표는 무대 px (ctx.width × ctx.height)
+ctx.loop((t, dt) => { /* 매 프레임: 활성 슬라이드일 때만 호출. t = 진입 후 초 */ });
+return {
+  enter() {},                              // 슬라이드에 들어올 때마다
+  step(k, still) {},                       // 스텝이 바뀔 때마다 (k = 0..steps). still 이면 애니메이션 없이 최종 상태로
+  leave() {},                              // 슬라이드를 떠날 때
+  resize(w, h, pixelRatio) {},             // 창 크기가 바뀔 때 (캔버스 크기는 런타임이 이미 맞춤)
+  theme(colors) {},                        // t 키로 테마가 바뀔 때
+};
+```
+
+| `ctx` | 설명 |
+|---|---|
+| `el` | 장면 영역(div). SVG·DOM 을 여기에 붙인다. 크기는 `ctx.width`, `ctx.height` (무대 px, 1600×900 기준) |
+| `lib` | `libs` 로 불러온 라이브러리 |
+| `canvas()` | 장면을 덮는 `<canvas>` 를 만들어 준다(WebGL·Three.js 용). 픽셀 크기 = 영역 × `pixelRatio()` |
+| `canvas2d()` | 위 캔버스의 2D 컨텍스트, 배율 적용 완료 |
+| `pixelRatio()` | 기기 픽셀 비 × 무대 확대율 (최대 2) |
+| `loop(fn)` | 프레임 콜백 등록. 해제 함수를 돌려준다 |
+| `theme()` | 현재 테마 색 `{accent, fg, muted, bg, panel, line, edge, name}` |
+| `kindColor(kind)` | 노드 종류별 색 (`service`, `db` …) — 토폴로지와 같은 색 |
+| `model` | 시스템 모델 `{system, nodes, edges, flows}`. 실제 구성으로 시각화할 때 쓴다 |
+| `reduced`, `still` | 동작 줄이기 설정, 정지 화면(스크린샷·PDF) 여부 |
+
+런타임이 대신 해 주는 것:
+- **GSAP 정리**: `enter`/`step` 안에서 만든 GSAP 애니메이션은 `gsap.context` 로 모였다가 슬라이드를 떠나면 되돌려진다(다시 들어오면 `enter` 부터 새로). 선택자 문자열은 장면 영역 안에서만 찾는다. 되돌리기 때문에 GSAP 으로 바꾸는 속성은 처음 값을 꼭 갖고 있어야 한다(예: SVG `cx` 없이 `attr:{cx}` 를 트윈하면 빈 값으로 되돌아가 콘솔 에러)
+- **정지 화면**: `?still=1`·인쇄·`render_check.py`·`prefers-reduced-motion` 에서는 진행 중인 GSAP 애니메이션을 끝 상태로 보내고, 루프는 `t=1.5` 로 한 프레임만 그린다. `step(k, still)` 에서 `duration: still ? 0 : 1` 처럼 처리하면 확실하다
+- **지연 초기화**: 장면은 처음 보일 때 만들어진다(WebGL 컨텍스트 수 제한·로드 시간). 루프는 활성 슬라이드에서만 돈다
+- 오버뷰(`o`)에는 캔버스의 현재 픽셀이 복사된다. WebGL 은 `preserveDrawingBuffer: true` 를 줘야 오버뷰·PDF 에 남는다
+
+예시: `examples/recap/deck-scene.json` 과 `scenes/` (WebGL 셰이더, GSAP+SVG 파이프라인, Canvas 2D 파티클, Three.js 3D 토폴로지).
 
 ## 테마
 
