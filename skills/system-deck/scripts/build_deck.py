@@ -81,6 +81,14 @@ LIMITS = {"title": 28, "title_slide": 40, "bullet": 45, "card_body": 45, "detail
 # flow 의 스텝은 요청 흐름 단계 수라 model-schema.md 의 흐름 한계(12)를 따른다.
 RHYTHM = {"same_run": 3, "statement_max": 2, "steps_max": 7, "flow_steps_max": 12, "transitions_max": 3}
 
+# scene 결정성 규약(deck-schema.md "결정성 규약")을 깨는 코드. 같은 시각을 다시 찍어도 화면이 달라진다.
+NONDET = [
+    (re.compile(r"\bMath\.random\s*\("), "Math.random → ctx.rand(i, salt)"),
+    (re.compile(r"\b(?:Date\.now|performance\.now)\s*\(|\bnew\s+Date\s*\("), "시계 읽기 → ctx.loop 의 t·ts"),
+    (re.compile(r"\b(?:setTimeout|setInterval|requestAnimationFrame)\s*\("), "타이머·자체 루프 → ctx.loop"),
+    (re.compile(r"[+\-*]=[^;\n]*\bdt\b"), "dt 누적 → t·ts 의 함수로 바로 계산"),
+]
+
 # 주제형 제목(슬라이드가 무슨 주제인지만 말하고 결론은 없는 제목). 주장형으로 바꾸라고 경고한다.
 TOPIC_TITLES = {
     "개요", "소개", "배경", "목차", "문제", "문제점", "왜 만들었나", "목표", "아키텍처", "시스템 아키텍처",
@@ -325,6 +333,13 @@ def lint(deck: dict) -> list[str]:
             remote = any(isinstance(L, str) or (isinstance(L, dict) and L.get("url")) for L in s.get("libs") or [])
             if remote and not s.get("fallback"):
                 w.append(f"{p}: CDN 라이브러리를 쓰는데 fallback(오프라인일 때 보일 문구) 없음")
+            code = s.get("script") or ""
+            if not code and s.get("script_file") and (BASE_DIR / s["script_file"]).is_file():
+                code = (BASE_DIR / s["script_file"]).read_text(encoding="utf-8-sig")
+            code = re.sub(r"//[^\n]*", "", code)   # 주석 속 설명은 세지 않는다
+            for rx, fix in NONDET:
+                if rx.search(code):
+                    w.append(f"{p}: 결정성 규약 위반 — {fix}")
         if t == "code":
             for v in ([s.get("code", "")] + [m.get("code", "") for m in (s.get("magic") or []) if isinstance(m, dict)]):
                 if len(str(v).rstrip("\n").split("\n")) > 20:

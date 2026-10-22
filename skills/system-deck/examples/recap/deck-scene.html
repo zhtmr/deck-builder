@@ -583,13 +583,16 @@ return {
 __SCENES[3] = {libs: [], run: async function(ctx){
 // Canvas 2D: 흩어져 흐르던 점들이 → 키를 누르면 오른쪽의 문서(회의록) 줄 모양으로 모인다.
 // ctx.canvas2d() 는 고해상도 스케일이 적용된 2D 컨텍스트를 준다(좌표는 무대 px).
+// 결정성 규약: 점의 위치를 프레임마다 누적하지 않고 시각(t)과 스텝 정보({k, ts, from})로 바로 계산한다.
+// 무작위 값은 ctx.rand(i, salt) 로 얻어 다시 열어도, 시각을 지정해 찍어도 같은 화면이 나온다.
 const g = ctx.canvas2d();
 const N = ctx.reduced ? 500 : 1100;
-let W = ctx.width, H = ctx.height, mode = 0, color = ctx.theme().accent;
+let W = ctx.width, H = ctx.height, color = ctx.theme().accent;
+const { rand } = ctx;
 
-const P = Array.from({ length: N }, () => ({
-  x: Math.random() * W, y: Math.random() * H, tx: 0, ty: 0,
-  r: 0.8 + Math.random() * 1.8, a: 0.25 + Math.random() * 0.6,
+const P = Array.from({ length: N }, (_, i) => ({
+  u: rand(i, 1), v: rand(i, 2), sp: 0.6 + rand(i, 3) * 0.8, ph: rand(i, 4) * Math.PI * 2,
+  r: 0.8 + rand(i, 5) * 1.8, a: 0.25 + rand(i, 6) * 0.6, tx: 0, ty: 0,
 }));
 
 // 회의록 모양: 오른쪽에 제목 줄 + 본문 줄 8개
@@ -597,45 +600,37 @@ function targets() {
   const x0 = W * 0.6, w = W * 0.32, y0 = H * 0.2, rows = 9, gap = (H * 0.6) / (rows - 1);
   P.forEach((p, i) => {
     const r = i % rows, len = r === 0 ? 0.5 : r % 4 === 3 ? 0.62 : 1;
-    p.tx = x0 + Math.random() * w * len;
-    p.ty = y0 + r * gap + (Math.random() - 0.5) * (r === 0 ? 12 : 5);
+    p.tx = x0 + rand(i, 7) * w * len;
+    p.ty = y0 + r * gap + (rand(i, 8) - 0.5) * (r === 0 ? 12 : 5);
   });
 }
 targets();
 
-function draw() {
+// 흐름: 출발점에서 점마다 정한 방향으로 떠가며 출렁인다. 화면 밖으로 나가면 반대편에서 들어온다
+const wrap = (x, m) => ((x % m) + m) % m;
+function flow(p, t) {
+  const x = p.u * W + Math.cos(p.ph) * 38 * p.sp * t + Math.sin(t * 0.35 + p.ph) * 24;
+  const y = p.v * H + Math.sin(p.ph) * 38 * p.sp * t + Math.cos(t * 0.25 + p.ph * 1.3) * 24;
+  return [wrap(x + 5, W + 10) - 5, wrap(y + 5, H + 10) - 5];
+}
+const ease = u => 1 - Math.pow(1 - Math.min(1, u), 3);
+
+ctx.loop((t, dt, { k, ts, from }) => {
+  // 문서 쪽으로 모인 정도 0~1. 스텝이 바뀌면 1.2초 동안 그 방향으로 옮겨 간다
+  const e = ease(ts / 1.2), m = k === from ? (k ? 1 : 0) : k ? e : 1 - e;
   g.clearRect(0, 0, W, H);
   g.fillStyle = color;
   for (const p of P) {
-    g.globalAlpha = mode ? Math.min(1, p.a + 0.3) : p.a;
-    g.beginPath(); g.arc(p.x, p.y, p.r, 0, Math.PI * 2); g.fill();
+    const [fx, fy] = flow(p, t);
+    g.globalAlpha = Math.min(1, p.a + 0.3 * m);
+    g.beginPath(); g.arc(fx + (p.tx - fx) * m, fy + (p.ty - fy) * m, p.r, 0, Math.PI * 2); g.fill();
   }
   g.globalAlpha = 1;
-}
-
-ctx.loop((t, dt) => {
-  for (const p of P) {
-    if (mode) {
-      const k = Math.min(1, dt * 2.6);
-      p.x += (p.tx - p.x) * k; p.y += (p.ty - p.y) * k;
-    } else {
-      // 느린 흐름장: 위치와 시간으로 정한 방향으로 떠다니다 화면 밖으로 나가면 반대편에서 들어온다
-      const ang = Math.sin(p.y * 0.004 + t * 0.35) * 1.6 + Math.cos(p.x * 0.003 - t * 0.25);
-      p.x += Math.cos(ang) * 38 * dt; p.y += Math.sin(ang) * 38 * dt;
-      if (p.x < -5) p.x = W + 5; if (p.x > W + 5) p.x = -5;
-      if (p.y < -5) p.y = H + 5; if (p.y > H + 5) p.y = -5;
-    }
-  }
-  draw();
 });
 
 return {
-  step(k, still) {
-    mode = k;
-    if (still && mode) P.forEach(p => { p.x = p.tx; p.y = p.ty; });   // 정지 화면은 다 모인 상태
-  },
   resize(w, h) { W = w; H = h; targets(); },
-  theme(th) { color = th.accent; draw(); },
+  theme(th) { color = th.accent; },
 };
 
 }};
@@ -766,6 +761,7 @@ ctx.loop(t => {
 });
 
 return {
+  enter() { view.r = 24; view.y = 4.5; },   // GSAP 이 바꾸는 값은 처음 값을 직접 정한다(결정성 규약)
   step(k, still) {
     playing = k >= 1;
     gsap.to(view, { r: playing ? 19 : 24, y: playing ? 3 : 4.5, duration: still ? 0 : 1.4, ease: 'power3.inOut', overwrite: true });
@@ -1037,8 +1033,21 @@ return {
   // ---------- scene: 작성자 스크립트 장면 (GSAP · Canvas · SVG · WebGL · Three.js) ----------
   // 처음 보여 줄 때 초기화한다(라이브러리 로드 시간, WebGL 컨텍스트 수 제한). 슬라이드를 떠나면 루프가 멈추고
   // enter/step 안에서 만든 GSAP 애니메이션은 되돌린다(다시 들어오면 enter 부터 새로).
+  // 결정성 규약: 장면의 한 프레임은 (t, k, ts, from) 만으로 정해져야 한다. 그래야 deck.seek 로 같은 시각을 다시 찍으면
+  // 같은 화면이 나오고(render_check.py --determinism), 스크린샷·PDF·영상 내보내기가 재현된다.
   const SCENES = window.__SCENES || {}, libCache = {}, STILL_T = 1.5;
   let liveScene = null;
+  // 결정적 무작위: 같은 (i, salt) 에 늘 같은 0~1 값. Math.random 대신 쓴다
+  function hash01(i, salt){
+    let h = Math.imul((i | 0) ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul((salt | 0) + 0x632be5ab, 0xc2b2ae35);
+    h = Math.imul(h ^ (h >>> 16), 0x7feb352d); h = Math.imul(h ^ (h >>> 15), 0x846ca68b);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+  // 결정적 잡음: 시각 t 에 대해 부드럽게 변하는 -1~1 값 (흔들림·떠다님)
+  function noise1(t, seed){
+    const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
+    return (hash01(i, seed) + (hash01(i + 1, seed) - hash01(i, seed)) * u) * 2 - 1;
+  }
   function loadLib(L){
     if (!libCache[L.url]){
       const p = L.module ? import(L.url) : new Promise((ok, no) => {
@@ -1057,7 +1066,8 @@ return {
   }
   function sceneInit(s){
     const def = SCENES[s.dataset.scene], host = s.querySelector('.scene'), wrap = s.querySelector('.scene-wrap');
-    const sc = {s, host, loops: new Set(), canvases: [], api: {}, entered: false, t0: 0, last: 0, g: null};
+    const sc = {s, host, loops: new Set(), canvases: [], api: {}, entered: false, t0: 0, last: 0, g: null,
+                k: 0, from: 0, tk: 0, frozen: false};
     const ctx = sc.ctx = {
       el: host, slide: s, lib: {}, model: window.__MODEL, reduced, still: false,
       get width(){ return host.clientWidth; }, get height(){ return host.clientHeight; },
@@ -1071,6 +1081,8 @@ return {
       canvas(){ const c = document.createElement('canvas'); c.className = 'scene-cv'; host.prepend(c); sc.canvases.push(c); sizeCanvas(c, ctx); return c; },
       canvas2d(){ const c = ctx.canvas(); c._g2d = c.getContext('2d'); sizeCanvas(c, ctx); return c._g2d; },
       loop(fn){ sc.loops.add(fn); return () => sc.loops.delete(fn); },
+      rand: (i, salt = 0) => hash01(i, salt),
+      noise: (t, seed = 0) => noise1(t, seed),
     };
     return (async () => {
       try {
@@ -1097,11 +1109,12 @@ return {
     liveScene = s;
     return s._scene.then(sc => {
       if (!sc || liveScene !== s) return;
-      sc.ctx.still = still;
+      sc.ctx.still = still; sc.frozen = false;
+      const now = performance.now();
       if (!sc.entered){
         if (sc.g){ sc.g.revert(); sc.g = null; }
-        sc.entered = true; sc.t0 = sc.last = performance.now(); sceneCall(sc, 'enter');
-      }
+        sc.entered = true; sc.t0 = sc.last = now; sc.k = sc.from = k; sc.tk = now; sceneCall(sc, 'enter');
+      } else if (k !== sc.k){ sc.from = sc.k; sc.k = k; sc.tk = now; }
       sceneCall(sc, 'step', k, still);
       if (still){
         // 정지 화면: 진행 중인 최상위 GSAP 애니메이션을 끝 상태로, 루프는 한 프레임만
@@ -1112,7 +1125,25 @@ return {
     });
   }
   // 루프가 돌지 않는 상태(정지 화면, 비활성 슬라이드)에서 한 프레임만 다시 그린다
-  function stillFrame(sc){ sc.loops.forEach(fn => { try { fn(STILL_T, 0); } catch (e){ console.error(e); } }); }
+  function stillFrame(sc){ sc.loops.forEach(fn => { try { fn(STILL_T, 0, {k: sc.k, ts: STILL_T, from: sc.k}); } catch (e){ console.error(e); } }); }
+  // 시각 지정: 장면에 들어와 곧바로 스텝 k 로 간 뒤 t 초가 지난 화면을 그리고 멈춘다(루프 정지).
+  // GSAP 애니메이션은 일시정지한 채 그 시각으로 옮기고, 루프는 (t, 0, {k, ts: t, from}) 로 한 번 부른다.
+  // from 기본값은 k-1: → 키로 막 넘어온 전환 중의 화면
+  function sceneSeek(s, k, t, from){
+    s._scene = s._scene || sceneInit(s);
+    liveScene = s;
+    return s._scene.then(sc => {
+      if (!sc) return false;
+      if (sc.g){ sc.g.revert(); sc.g = null; }
+      sc.ctx.still = false; sc.frozen = true; sc.entered = true;
+      sc.k = k; sc.from = from; sc.t0 = sc.tk = sc.last = performance.now() - t * 1000;
+      sceneCall(sc, 'enter'); sceneCall(sc, 'step', k, false);
+      const G = window.gsap;
+      if (sc.g && G) sc.g.data.forEach(a => { if (a.parent === G.globalTimeline){ a.pause(); a.totalTime(Math.max(0, t - a.delay())); } });
+      sc.loops.forEach(fn => { try { fn(t, 0, {k, ts: t, from}); } catch (e){ console.error(`[scene ${+s.dataset.scene + 1}] loop`, e); } });
+      return true;
+    });
+  }
   function sceneHide(s){
     if (!s._scene) return;
     s._scene.then(sc => {
@@ -1124,9 +1155,10 @@ return {
   }
   function sceneFrame(now){
     const sc = liveScene && liveScene._sc;
-    if (!sc || !sc.entered || sc.ctx.still || document.hidden) { if (sc) sc.last = now; return; }
+    if (!sc || !sc.entered || sc.ctx.still || sc.frozen || document.hidden) { if (sc) sc.last = now; return; }
     const t = (now - sc.t0) / 1000, dt = Math.min(0.1, (now - sc.last) / 1000); sc.last = now;
-    sc.loops.forEach(fn => { try { fn(t, dt); } catch (e){ sc.loops.delete(fn); console.error(`[scene ${+sc.s.dataset.scene + 1}] loop`, e); } });
+    const info = {k: sc.k, ts: (now - sc.tk) / 1000, from: sc.from};
+    sc.loops.forEach(fn => { try { fn(t, dt, info); } catch (e){ sc.loops.delete(fn); console.error(`[scene ${+sc.s.dataset.scene + 1}] loop`, e); } });
   }
   addEventListener('resize', () => slides.forEach(s => {
     const sc = s._sc; if (!sc) return;
@@ -1164,7 +1196,7 @@ return {
   function closeOverview(){ document.body.classList.remove('overview'); ov.innerHTML = ''; }
 
   // ---------- 렌더 ----------
-  function render(still){
+  function render(still, noScene){
     still = still || reduced;
     slides.forEach((s,i) => { s.classList.toggle('active', i === cur); s.classList.toggle('before', i < cur); s.classList.toggle('after', i > cur); });
     const s = slides[cur];
@@ -1178,18 +1210,18 @@ return {
     else if (s.dataset.autoflow && !still) startAuto(s);
     applyFocus(s);
     if (liveScene && liveScene !== s){ sceneHide(liveScene); liveScene = null; }
-    if (s.dataset.scene !== undefined) sceneShow(s, step, still);
+    if (s.dataset.scene !== undefined && !noScene) sceneShow(s, step, still);
     prog.style.width = ((cur + 1) / slides.length * 100) + '%';
     notesBox.textContent = s.querySelector('.notes')?.textContent || '';
     if (location.hash !== '#' + (cur+1)) history.replaceState(null, '', '#' + (cur+1));
   }
   function restart(s){ s.classList.remove('active'); void s.offsetWidth; }
 
-  function go(i, k=0, still=false){
+  function go(i, k=0, still=false, noScene=false){
     i = Math.max(0, Math.min(slides.length-1, i));
     if (i !== cur){ restart(slides[i]); delete slides[i].dataset.typed; }
     cur = i; step = Math.max(0, Math.min(+slides[i].dataset.steps || 0, k));
-    render(still);
+    render(still, noScene);
   }
   function next(){
     const max = +slides[cur].dataset.steps || 0;
@@ -1247,7 +1279,14 @@ return {
   if (params.has('still')) document.body.classList.add('still');
   const start = parseInt((location.hash||'').slice(1)) || 1;
   go(start-1, 0);
-  window.deck = { go, next, prev, count: slides.length, steps: i => +slides[i].dataset.steps || 0, ready: sceneReady };
+  // seek(i, k, t[, from]): 슬라이드 i 에서 스텝 from(기본 k-1)→k 로 넘어간 지 t 초 된 장면 화면.
+  // scene 이 아니면 go 와 같다. 끝나면 true
+  function seek(i, k, t, from){
+    go(i, k, false, true);   // 장면은 sceneSeek 가 한 번만 연다 (step 이 두 번 불리면 GSAP overwrite 로 처음 값을 잃는다)
+    const s = slides[cur];
+    return s.dataset.scene === undefined ? Promise.resolve(true) : sceneSeek(s, step, t, from === undefined ? Math.max(0, step - 1) : from).then(ok => sceneReady().then(r => ok && r));
+  }
+  window.deck = { go, next, prev, seek, count: slides.length, steps: i => +slides[i].dataset.steps || 0, ready: sceneReady };
 })();
 </script>
 </body>

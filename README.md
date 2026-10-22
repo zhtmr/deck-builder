@@ -155,9 +155,11 @@ PDF 로도 뽑아줘
 ```js
 // scenes/*.js — async function(ctx){ … } 의 본문
 const g = ctx.canvas2d();
-ctx.loop((t, dt) => { /* 매 프레임 그리기 */ });
+ctx.loop((t, dt, { k, ts, from }) => { /* 매 프레임 그리기: t·k·ts·from 만으로 정한다 */ });
 return { step(k, still) { /* → 키 k 단계 */ } };
 ```
+
+장면은 **결정성 규약**을 따릅니다. 한 프레임은 시각과 스텝만으로 정해지고, 무작위는 `ctx.rand(i, salt)` 로 얻습니다. 그래서 `deck.seek(i, k, t)` 로 같은 시각을 다시 찍으면 같은 화면이 나오고, `render_check.py --determinism` 이 이를 검사합니다.
 
 ## 문서도 입력으로
 

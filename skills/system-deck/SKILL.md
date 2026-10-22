@@ -150,7 +150,7 @@ EOF
 - 실제 화면(대시보드, 관리 콘솔, 결과 화면)이 있으면 추상 도형보다 `image` + `marks` 로 보여 준다. 캡처는 사용자가 준 파일이나 저장소의 `docs/`·`assets/` 이미지만 쓰고, 없는 화면을 만들어 내지 않는다
 - 시스템 점검·검증 결과는 `terminal`, 정량 변화는 `stats`(+`bar`), 3~4가지 효과는 `bento`, 일정은 `timeline`
 - 전환은 기본 `slide-left`. 장 전환·전환점 슬라이드만 `zoom`/`slide-up` 으로 바꿔 리듬을 만든다 (한 덱에서 3종 넘게 섞지 않는다)
-- 기존 타입으로 안 되는 시각화(3D 구성도, 셰이더 배경, 맞춤 SVG 애니메이션, 파티클)는 `scene` 으로 직접 그린다. 스크립트는 `.deck/scenes/*.js` 에 두고 `script_file` 로 참조한다. 덱 전체에서 1~2장, 데이터는 `ctx.model` 등 근거 있는 것만 쓴다. CDN 라이브러리(`gsap`, `three`)는 오프라인에서 안 보이므로 `fallback` 을 쓰고, 오프라인 발표면 라이브러리를 `.deck/vendor/` 에 받아 `{"name", "src"}` 로 내장한다
+- 기존 타입으로 안 되는 시각화(3D 구성도, 셰이더 배경, 맞춤 SVG 애니메이션, 파티클)는 `scene` 으로 직접 그린다. 스크립트는 `.deck/scenes/*.js` 에 두고 `script_file` 로 참조한다. 덱 전체에서 1~2장, 데이터는 `ctx.model` 등 근거 있는 것만 쓴다. 장면 스크립트는 `deck-schema.md` 의 **결정성 규약**을 따른다(`Math.random`·`dt` 누적 대신 `ctx.rand`·시각의 함수). CDN 라이브러리(`gsap`, `three`)는 오프라인에서 안 보이므로 `fallback` 을 쓰고, 오프라인 발표면 라이브러리를 `.deck/vendor/` 에 받아 `{"name", "src"}` 로 내장한다
 - 같은 타입 슬라이드가 3장 연속 나오지 않게 순서를 섞는다
 - `references/critique.md` 의 "뻔한 장표" 요소(불릿만 있는 장 반복, 기술 스택 나열, "감사합니다"로만 끝나는 장 등)는 이유 없이 쓰지 않는다. 쓰면 이유를 `outline.md` 에 적는다
 - 스텝(→) 수는 슬라이드당 2~5. 7을 넘으면 슬라이드를 쪼갠다
@@ -178,6 +178,7 @@ python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/s
   - 노드 이름이 말줄임(…)으로 잘렸는가 → `label` 은 10자 안팎, 세부는 `tech` 로
   - 한 계층에 노드가 6개를 넘어 납작해졌는가 → `nodes` 부분집합 슬라이드로 분리
   - 흐름이 지그재그로 꼬였는가 → 해당 노드에 `tier` 를 명시해 열 위치를 고정
+- `scene` 슬라이드가 있으면 `render_check.py` 에 `--determinism` 을 더한다. 같은 시각인데 화면이 다르다는 problem 은 결정성 규약을 어긴 것이므로 스크립트를 고친다
 - 결함 수정은 최대 3회 반복한다. 그래도 남으면 5-b 로 넘어가 비평에서 그 장을 다시 만들지 정한다
 - playwright 가 없으면 `pip install playwright && python -m playwright install chromium` 을 안내하고, 설치가 불가하면 검수 단계를 건너뛰었다고 명시한다. 이때는 5-b 비평도 할 수 없으므로 함께 건너뛰었다고 적는다.
 

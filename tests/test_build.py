@@ -272,6 +272,28 @@ class RenderTest(unittest.TestCase):
         w = "\n".join(bd.lint(deck({"type": "scene", "script": "a", "notes": "n"})))
         self.assertNotIn("fallback", w)
 
+    def test_scene_lint_determinism(self):
+        def w(code):
+            return "\n".join(bd.lint(deck({"type": "scene", "script": code, "notes": "n"})))
+        self.assertIn("ctx.rand", w("const x = Math.random() * W;"))
+        self.assertIn("시계", w("const t0 = performance.now();"))
+        self.assertIn("타이머", w("setTimeout(draw, 16);"))
+        self.assertIn("dt 누적", w("ctx.loop((t, dt) => { p.x += v * dt; });"))
+        clean = ("const x = ctx.rand(i, 1) * W; // Math.random 대신\n"
+                 "ctx.loop((t, dt, { ts }) => { const x = x0 + v * t; });")
+        self.assertNotIn("결정성", w(clean))
+
+    def test_examples_follow_determinism(self):
+        for s in json.loads((EX / "deck-scene.json").read_text(encoding="utf-8"))["slides"]:
+            if s["type"] == "scene":
+                code = (EX / s["script_file"]).read_text(encoding="utf-8")
+                self.assertNotIn("결정성", "\n".join(bd.lint(deck({**s, "script": code}))), s["script_file"])
+
+    def test_template_exposes_seek(self):
+        tpl = (SCRIPTS / "deck_template.html").read_text(encoding="utf-8")
+        self.assertIn("seek, count", tpl)
+        self.assertIn("rand: (i, salt = 0)", tpl)
+
     def test_html_escaped(self):
         html, _ = self.render({"type": "bento", "cards": [{"title": "<script>x</script>"}, {"title": "b"}]})
         self.assertNotIn("<script>x", html)

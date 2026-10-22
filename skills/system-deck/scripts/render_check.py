@@ -5,6 +5,7 @@ render_check.py — 생성된 장표를 헤드리스 브라우저로 열어 검�
 - 각 슬라이드의 마지막 스텝 상태를 PNG 로 저장 (에이전트가 직접 열어보고 겹침/잘림 확인)
 - --sheet: 슬라이드 전체를 라벨 붙은 격자 한 장으로 (Read 한 번으로 덱 전체 리듬·밀도 확인)
 - --step-sheet: 슬라이드마다 스텝 0→N 을 한 줄로 (중간 스텝의 겹침·빈 화면 확인)
+- --determinism: scene 슬라이드를 같은 (스텝, 시각)으로 두 번 찍어 비교 (deck-schema.md "결정성 규약")
 - 콘솔 에러, 텍스트 넘침(슬라이드 밖으로 나간 요소) 자동 탐지
 - --pdf 옵션으로 인쇄용 PDF 도 생성
 
@@ -22,6 +23,11 @@ import sys
 from pathlib import Path
 
 W, H = 1600, 900
+SEEK_TIMES = (0.6, 2.4)   # 결정성 검사 시각(초): 진입 애니메이션 도중과 끝난 뒤
+# 장면 밖의 CSS 애니메이션(배경 오로라, 슬라이드 전환)이 비교를 흔들지 않게: 끝나는 것은 끝내고 무한 반복은 0초에 세운다
+FREEZE_JS = """() => document.getAnimations().forEach(a => {
+  const end = a.effect ? a.effect.getComputedTiming().endTime : 0;
+  if (end === Infinity){ a.pause(); a.currentTime = 0; } else a.finish(); })"""
 STEP_COLS = 6          # 스텝 시트 한 줄의 최대 칸 수. 스텝이 더 많으면 처음·끝을 포함해 고르게 뽑는다
 
 
@@ -63,6 +69,42 @@ def sheet_html(rows: list[dict], cols: int, thumb: int) -> str:
     return f'<!doctype html><meta charset="utf-8"><style>{css}</style><div class="grid">{"".join(parts)}</div>'
 
 
+def scene_shot(page, i: int, k: int, t: float):
+    """슬라이드 i 스텝 k 를 연 지 t 초 된 장면 영역 PNG. 장면을 만들지 못했으면 None."""
+    if not page.evaluate(f"deck.seek({i-1}, {k}, {t})"):
+        return None
+    page.evaluate(FREEZE_JS)
+    return page.locator(".slide.active .scene-wrap").screenshot()
+
+
+def determinism(browser, url: str, slides: list[tuple[int, int]]) -> tuple[list[str], list[str]]:
+    """scene 슬라이드를 페이지 두 개에서 다른 순서로 같은 (스텝, 시각)에 찍어 비교한다.
+    두 번째 페이지는 다른 시각을 먼저 거쳐 가므로 누적 상태·초기화 때의 무작위·시계 의존이 드러난다."""
+    problems, warnings = [], []
+    cases = [(i, k, t) for i, n in slides for k in sorted({0, n}) for t in SEEK_TIMES]
+    shots = []
+    for order in (cases, cases[::-1]):
+        pg = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+        pg.goto(url)
+        pg.wait_for_timeout(400)
+        got = {}
+        for i, k, t in order:
+            if order is not cases:
+                scene_shot(pg, i, k, t + 1.7)   # 다른 시각을 먼저 거쳐 간다
+            got[(i, k, t)] = scene_shot(pg, i, k, t)
+        shots.append(got)
+        pg.close()
+    for key in cases:
+        a, b = shots[0][key], shots[1][key]
+        i, k, t = key
+        if a is None or b is None:
+            warnings.append(f"slide {i}: 장면을 만들지 못해 결정성 검사를 건너뜀 (라이브러리 로드 실패 등)")
+        elif a != b:
+            problems.append(f"slide {i}: 결정성 — 스텝 {k}, {t}초 화면이 찍을 때마다 다름 "
+                            "(Math.random·dt 누적·시계 의존 의심, deck-schema.md 결정성 규약)")
+    return problems, sorted(set(warnings))
+
+
 def save_sheet(browser, rows: list[dict], cols: int, thumb: int, out: Path) -> None:
     pg = browser.new_page(viewport={"width": cols * (thumb + 12) + 32, "height": 100})   # full_page 라 내용 높이만큼 늘어난다
     pg.set_content(sheet_html(rows, cols, thumb))
@@ -79,6 +121,7 @@ def main():
     ap.add_argument("--step-sheet", type=Path, default=None, help="슬라이드별 스텝 0→N 줄 PNG (스텝 있는 슬라이드만)")
     ap.add_argument("--cols", type=int, default=3, help="--sheet 의 열 수")
     ap.add_argument("--per", type=int, default=12, help="--sheet 한 장의 칸 수 (--step-sheet 는 줄 수의 기준 per/2)")
+    ap.add_argument("--determinism", action="store_true", help="scene 슬라이드를 같은 시각에 두 번 찍어 비교")
     ap.add_argument("--pdf", type=Path, default=None)
     ap.add_argument("--slides", default="", help="쉼표로 구분한 슬라이드 번호(1부터). 비우면 전체")
     a = ap.parse_args()
@@ -166,6 +209,15 @@ def main():
                     sheets.append(str(out))
             else:
                 warnings.append("step-sheet: 스텝이 있는 슬라이드가 없어 만들지 않음")
+        if a.determinism:
+            scenes = [(i, pg.evaluate(f"deck.steps({i-1})")) for i in want
+                      if pg.evaluate(f"document.querySelectorAll('.slide')[{i-1}].dataset.scene !== undefined")]
+            if scenes:
+                pr, wr = determinism(b, url, scenes)
+                problems += pr
+                warnings += wr
+            else:
+                warnings.append("determinism: scene 슬라이드가 없어 건너뜀")
         if a.pdf:
             pg.goto(url + "?still=1")
             pg.wait_for_timeout(400)
