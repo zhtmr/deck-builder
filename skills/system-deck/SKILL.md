@@ -135,12 +135,17 @@ EOF
 
 ```bash
 python3 $S/build_deck.py <repo>/.deck/deck.json -o <repo>/.deck/out/deck.html
-python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/shots
+python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/shots \
+  --sheet <repo>/.deck/out/sheet.png --step-sheet <repo>/.deck/out/steps.png
 ```
 
-- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 주제형 제목, `end` 의 `asks` 없음, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
+- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 주제형 제목, `end` 의 `asks` 없음, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)와 리듬 경고(같은 타입 3장 연속, `bullets` 2장 연속, `statement` 3장 이상, 스텝 7개 초과 — `flow` 는 12개, 전환 4종 이상)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
 - `problems` 가 비어 있지 않으면 고친다. `warnings` 의 CDN 로드 실패는 오프라인 환경이면 무시한다.
-- **스크린샷을 Read 로 직접 열어** topology/flow 슬라이드를 하나씩 본다. 확인 항목:
+- **시트를 Read 로 직접 연다.** 슬라이드마다 PNG 를 하나씩 여는 대신 시트로 덱 전체를 한 번에 본다. 칸이 많으면 `sheet_01.png`, `sheet_02.png` … 로 나뉘고 출력 JSON 의 `sheets` 에 경로가 있다
+  - `sheet.png` (슬라이드 전체, 최종 스텝): 같은 레이아웃이 이어지는 곳, 글이 몰린 장과 빈 장의 편차, 제목만 읽어도 이야기가 이어지는지(라벨에 번호·타입·제목이 있다)
+  - `steps.png` (슬라이드마다 스텝 0→N 한 줄, 많으면 처음·끝 포함 6칸): 중간 스텝에서 요소가 겹치거나, 첫 스텝이 빈 화면이거나, 스텝이 바뀌어도 화면이 거의 그대로인 곳
+  - 시트에서 이상한 슬라이드만 `shots/slide-NN.png` 를 열어 자세히 본다
+- topology/flow 슬라이드 확인 항목:
   - 간선 라벨이 노드나 다른 라벨을 가리지 않는가 → 라벨을 짧게(2~3단어), 또는 노드 수를 줄인다
   - 노드 이름이 말줄임(…)으로 잘렸는가 → `label` 은 10자 안팎, 세부는 `tech` 로
   - 한 계층에 노드가 6개를 넘어 납작해졌는가 → `nodes` 부분집합 슬라이드로 분리

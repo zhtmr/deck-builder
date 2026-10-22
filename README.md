@@ -212,7 +212,7 @@ deck-builder/
 │  │  ├─ ingest.py                 # 문서(HWPX/PDF/PPTX/DOCX/MD) → source.md + 표 JSON
 │  │  ├─ build_deck.py             # deck.json + model → HTML (검증·린트 포함, 표준 라이브러리만 사용)
 │  │  ├─ deck_template.html        # 슬라이드 엔진 + 토폴로지 애니메이션 + scene 런타임
-│  │  ├─ render_check.py           # 헤드리스 검수: 스크린샷, 넘침, 콘솔 에러, PDF
+│  │  ├─ render_check.py           # 헤드리스 검수: 스크린샷·시트, 넘침, 콘솔 에러, PDF
 │  │  └─ export_pptx.py            # 장표 → 이미지 PPTX (발표자 노트 포함)
 │  └─ examples/recap/              # 예시 모델·장표·scene 스크립트와 빌드 결과
 ├─ tools/                          # README 미디어 녹화, GitHub Pages 데모 생성
