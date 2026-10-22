@@ -77,6 +77,18 @@ BASE_DIR = Path(".")                  # build() 가 deck.json 위치로 설정�
 # 텍스트 길이 한계 (공백 포함, 마크업 제외). 넘으면 린트 경고.
 LIMITS = {"title": 28, "title_slide": 40, "bullet": 45, "card_body": 45, "detail": 45, "label": 40}
 
+# 덱 리듬 한계. 넘으면 린트 경고.
+# flow 의 스텝은 요청 흐름 단계 수라 model-schema.md 의 흐름 한계(12)를 따른다.
+RHYTHM = {"same_run": 3, "statement_max": 2, "steps_max": 7, "flow_steps_max": 12, "transitions_max": 3}
+
+# scene 결정성 규약(deck-schema.md "결정성 규약")을 깨는 코드. 같은 시각을 다시 찍어도 화면이 달라진다.
+NONDET = [
+    (re.compile(r"\bMath\.random\s*\("), "Math.random → ctx.rand(i, salt)"),
+    (re.compile(r"\b(?:Date\.now|performance\.now)\s*\(|\bnew\s+Date\s*\("), "시계 읽기 → ctx.loop 의 t·ts"),
+    (re.compile(r"\b(?:setTimeout|setInterval|requestAnimationFrame)\s*\("), "타이머·자체 루프 → ctx.loop"),
+    (re.compile(r"[+\-*]=[^;\n]*\bdt\b"), "dt 누적 → t·ts 의 함수로 바로 계산"),
+]
+
 # 주제형 제목(슬라이드가 무슨 주제인지만 말하고 결론은 없는 제목). 주장형으로 바꾸라고 경고한다.
 TOPIC_TITLES = {
     "개요", "소개", "배경", "목차", "문제", "문제점", "왜 만들었나", "목표", "아키텍처", "시스템 아키텍처",
@@ -321,6 +333,13 @@ def lint(deck: dict) -> list[str]:
             remote = any(isinstance(L, str) or (isinstance(L, dict) and L.get("url")) for L in s.get("libs") or [])
             if remote and not s.get("fallback"):
                 w.append(f"{p}: CDN 라이브러리를 쓰는데 fallback(오프라인일 때 보일 문구) 없음")
+            code = s.get("script") or ""
+            if not code and s.get("script_file") and (BASE_DIR / s["script_file"]).is_file():
+                code = (BASE_DIR / s["script_file"]).read_text(encoding="utf-8-sig")
+            code = re.sub(r"//[^\n]*", "", code)   # 주석 속 설명은 세지 않는다
+            for rx, fix in NONDET:
+                if rx.search(code):
+                    w.append(f"{p}: 결정성 규약 위반 — {fix}")
         if t == "code":
             for v in ([s.get("code", "")] + [m.get("code", "") for m in (s.get("magic") or []) if isinstance(m, dict)]):
                 if len(str(v).rstrip("\n").split("\n")) > 20:
@@ -333,6 +352,36 @@ def lint(deck: dict) -> list[str]:
             w.append(f"{p}: [확인 필요] 자리표시가 남아 있음")
         if t not in ("section", "end") and not s.get("notes"):
             w.append(f"{p}: 발표자 노트(notes) 없음")
+    return w
+
+
+def rhythm(deck: dict, steps: list[int]) -> list[str]:
+    """덱 전체의 리듬 린트 (storytelling.md 9절). steps 는 슬라이드별 스텝 수(slide_html 결과)."""
+    w: list[str] = []
+    slides = deck.get("slides", [])
+    types = [s.get("type") for s in slides]
+    i = 0
+    while i < len(types):
+        j = i
+        while j + 1 < len(types) and types[j + 1] == types[i]:
+            j += 1
+        if j - i + 1 >= RHYTHM["same_run"] and types[i] != "bullets":   # bullets 는 아래 2장 규칙이 잡는다
+            w.append(f"slides[{i}..{j}]: '{types[i]}' 가 {j - i + 1}장 연속 — 다른 타입을 사이에 끼워 순서를 섞는다")
+        i = j + 1
+    for i in range(1, len(types)):
+        if types[i] == types[i - 1] == "bullets":
+            w.append(f"slides[{i - 1}], slides[{i}]: 텍스트 장(bullets)이 이어짐 — 사이에 시각 장(topology/stats/bento/code)을 끼운다")
+    n = types.count("statement")
+    if n > RHYTHM["statement_max"]:
+        w.append(f"statement 가 {n}장 — 핵심 메시지 장은 덱 전체에서 1~{RHYTHM['statement_max']}장")
+    for i, (s, k) in enumerate(zip(slides, steps)):
+        cap = RHYTHM["flow_steps_max"] if s.get("type") == "flow" else RHYTHM["steps_max"]
+        if k > cap:
+            w.append(f"slides[{i}] ({s.get('type')}): 스텝 {k}개 > {cap} — 슬라이드를 쪼갠다")
+    default = deck.get("transition", "slide-left")
+    trs = sorted({s.get("transition") or default for s in slides})
+    if len(trs) > RHYTHM["transitions_max"]:
+        w.append(f"전환 {len(trs)}종({', '.join(trs)}) — 한 덱에서 {RHYTHM['transitions_max']}종 이하로")
     return w
 
 
@@ -924,7 +973,8 @@ def build(deck_path: Path, out: Path | None, validate_only: bool, strict: bool =
         for e in errs:
             print("  -", e, file=sys.stderr)
         return 1
-    warns = lint(deck) + asset_warns
+    rendered = [slide_html(i, s, model, deck) for i, s in enumerate(deck["slides"])]
+    warns = lint(deck) + rhythm(deck, [k for _, k in rendered]) + asset_warns
     if warns:
         print(f"경고 {len(warns)}건:", file=sys.stderr)
         for w in warns:
@@ -936,7 +986,7 @@ def build(deck_path: Path, out: Path | None, validate_only: bool, strict: bool =
               f"슬라이드 {len(deck.get('slides', []))}")
         return 0
 
-    slides = [slide_html(i, s, model, deck)[0] for i, s in enumerate(deck["slides"])]
+    slides = [h for h, _ in rendered]
     scenes = [scene_js(i, s) for i, s in enumerate(deck["slides"]) if s["type"] == "scene"]
     scene_block = ""
     if scenes:

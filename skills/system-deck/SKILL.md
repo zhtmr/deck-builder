@@ -5,6 +5,19 @@ description: 구현한 시스템(저장소)에 대한 발표 장표를 만들 �
 
 # system-deck — 시스템 발표 장표 에이전트
 
+## 이 스킬이 맞추는 기준
+
+요청의 각 부분이 결과물에 요구하는 것이다. 단계마다 판단이 갈리면 이 표로 정하고, 비평(5-b)과 마지막 보고도 이 표를 기준으로 한다.
+
+| 요청 | 뜻 | 결과물에서 확인할 것 | 확인하는 곳 |
+|---|---|---|---|
+| 구현한 **시스템**에 대한 발표 | 실제 구조와 흐름을 보여 준다. 그럴듯한 일반 아키텍처가 아니다 | 구성도·흐름 단계가 코드 근거(`파일:라인`)와 맞는다 | system-explorer, deck-reviewer |
+| **발표** 장표 | 청중이 결론을 가져가고 행동한다. 읽는 문서가 아니다 | 제목만 읽어도 주장이 이어진다. 마지막 장이 원하는 행동을 요청한다 | 헤드라인 테스트, deck-reviewer `story` |
+| **청중**에 맞춘 | 청중이 쓰는 말과 관심사로 고른 장 | 비개발 청중에게 코드 0장, 용어는 첫 등장에 풀이, 노드는 역할명 | 1단계 프레임, 비평 Q7 |
+| 데이터 흐름이 **움직이는** | 모션은 설명의 순서다. 장식이 아니다 | 스텝마다 말할 거리 하나가 화면에 생긴다. 모션이 메시지를 가리지 않는다 | `steps.png`, 비평 Q6 |
+| (모든 요청) **사실** | 모든 숫자·사실에 출처가 있다 | 근거 없는 수치 0개, 남은 것은 `[확인 필요]` 로 보고 | 빌드 린트, deck-reviewer |
+| (모든 요청) **완성도** | 템플릿처럼 보이지 않고, 깨진 곳이 없다 | 겹침·잘림 없음, 리듬 경고 없음, 모든 장이 비평에서 "유지" | `render_check.py`, 빌드 린트, 비평 |
+
 결과물: `<repo>/.deck/out/deck.html` (오프라인 동작하는 단일 HTML 장표) + 선택적으로 PDF.
 모든 중간 산출물은 `<repo>/.deck/` 아래에 둔다. 저장소의 다른 파일은 절대 수정하지 않는다.
 
@@ -15,13 +28,27 @@ description: 구현한 시스템(저장소)에 대한 발표 장표를 만들 �
   story.json         # 문제·결정·타임라인·지표 + 출처 (workflow-historian)
   outline.md         # 핵심 메시지 + 슬라이드 제목(주장 문장) 목록 (이 스킬이 작성, 사용자 승인)
   deck.json          # 슬라이드 구성 (이 스킬이 작성)
-  out/deck.html, out/shots/*.png, out/deck.pdf
+  critique_NN.md     # 비평 라운드 기록 (5-b)
+  out/deck.html, out/sheet*.png, out/steps*.png, out/shots/*.png, out/deck.pdf
 ```
 
 스크립트 경로: `S=${CLAUDE_PLUGIN_ROOT}/skills/system-deck/scripts`
 (플러그인 밖에서 스킬만 복사해 쓸 때는 이 SKILL.md 옆의 `scripts/`.)
 
 ---
+
+## 0단계 — 환경 점검
+
+```bash
+python3 $S/preflight.py
+```
+
+결과 끝의 **쓸 수 있는 경로**를 이후 계획에 반영한다. 사용자에게는 막힌 경로만 한 줄씩 알린다.
+
+- 검수(playwright·chromium) 불가 → 설치 명령을 안내한다. 설치하지 않으면 5단계 시트 검수와 5-b 비평을 건너뛰고, 빌드 린트(`--strict`)와 deck-reviewer 만으로 진행한다. 마지막 보고에 건너뛰었다고 적는다
+- 입력에 PDF·PPTX·DOCX·XLSX·HWP 가 있는데 변환 도구가 없으면 2-b 전에 설치를 안내하거나 `.hwpx`/`.md` 로 다시 달라고 한다
+- CDN 불가 → `scene` 슬라이드는 `.deck/vendor/` 에 내장한 라이브러리로만 쓰고, 없으면 `scene` 을 쓰지 않는다
+- git 없음 → story.json 은 README·문서·주석에서만 모은다
 
 ## 1단계 — 발표 맥락 확정
 
@@ -123,29 +150,46 @@ EOF
 - 실제 화면(대시보드, 관리 콘솔, 결과 화면)이 있으면 추상 도형보다 `image` + `marks` 로 보여 준다. 캡처는 사용자가 준 파일이나 저장소의 `docs/`·`assets/` 이미지만 쓰고, 없는 화면을 만들어 내지 않는다
 - 시스템 점검·검증 결과는 `terminal`, 정량 변화는 `stats`(+`bar`), 3~4가지 효과는 `bento`, 일정은 `timeline`
 - 전환은 기본 `slide-left`. 장 전환·전환점 슬라이드만 `zoom`/`slide-up` 으로 바꿔 리듬을 만든다 (한 덱에서 3종 넘게 섞지 않는다)
-- 기존 타입으로 안 되는 시각화(3D 구성도, 셰이더 배경, 맞춤 SVG 애니메이션, 파티클)는 `scene` 으로 직접 그린다. 스크립트는 `.deck/scenes/*.js` 에 두고 `script_file` 로 참조한다. 덱 전체에서 1~2장, 데이터는 `ctx.model` 등 근거 있는 것만 쓴다. CDN 라이브러리(`gsap`, `three`)는 오프라인에서 안 보이므로 `fallback` 을 쓰고, 오프라인 발표면 라이브러리를 `.deck/vendor/` 에 받아 `{"name", "src"}` 로 내장한다
+- 기존 타입으로 안 되는 시각화(3D 구성도, 셰이더 배경, 맞춤 SVG 애니메이션, 파티클)는 `scene` 으로 직접 그린다. 스크립트는 `.deck/scenes/*.js` 에 두고 `script_file` 로 참조한다. 덱 전체에서 1~2장, 데이터는 `ctx.model` 등 근거 있는 것만 쓴다. 장면 스크립트는 `deck-schema.md` 의 **결정성 규약**을 따른다(`Math.random`·`dt` 누적 대신 `ctx.rand`·시각의 함수). CDN 라이브러리(`gsap`, `three`)는 오프라인에서 안 보이므로 `fallback` 을 쓰고, 오프라인 발표면 라이브러리를 `.deck/vendor/` 에 받아 `{"name", "src"}` 로 내장한다
 - 같은 타입 슬라이드가 3장 연속 나오지 않게 순서를 섞는다
+- `references/critique.md` 의 "뻔한 장표" 요소(불릿만 있는 장 반복, 기술 스택 나열, "감사합니다"로만 끝나는 장 등)는 이유 없이 쓰지 않는다. 쓰면 이유를 `outline.md` 에 적는다
 - 스텝(→) 수는 슬라이드당 2~5. 7을 넘으면 슬라이드를 쪼갠다
 
 **사실 규칙**: 장표의 모든 사실 문장은 system-model 의 `evidence` 또는 story 의 `source` 로 거슬러 올라갈 수 있어야 한다. 근거 없는 숫자(성능 향상 %, 사용자 수 등)는 만들지 않는다. 필요한데 없으면 `"[확인 필요: ...]"` 자리표시로 남기고 마지막에 사용자에게 목록으로 알린다.
 
 `notes`(발표자 노트)는 슬라이드마다 1~3문장 작성한다. 발표 중 `s` 키로 볼 수 있다.
 
-## 5단계 — 빌드와 시각 검수 (최대 3회 반복)
+## 5단계 — 빌드·시각 검수·비평
 
 ```bash
 python3 $S/build_deck.py <repo>/.deck/deck.json -o <repo>/.deck/out/deck.html
-python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/shots
+python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/shots \
+  --sheet <repo>/.deck/out/sheet.png --step-sheet <repo>/.deck/out/steps.png
 ```
 
-- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 주제형 제목, `end` 의 `asks` 없음, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
+- `build_deck.py` 는 필드 오류(필수 필드 누락, 범위 밖 값)는 실패로, 린트 경고(제목 28자·본문 45자 초과, 주제형 제목, `end` 의 `asks` 없음, 강조 남용, 발표자 노트 없음, `terminal`/`stats` 항목의 `source` 없음, 오타 필드)와 리듬 경고(같은 타입 3장 연속, `bullets` 2장 연속, `statement` 3장 이상, 스텝 7개 초과 — `flow` 는 12개, 전환 4종 이상)는 stderr 로 알린다. 경고도 모두 고친다. 전부 해소됐는지 `--strict` 로 확인한다
 - `problems` 가 비어 있지 않으면 고친다. `warnings` 의 CDN 로드 실패는 오프라인 환경이면 무시한다.
-- **스크린샷을 Read 로 직접 열어** topology/flow 슬라이드를 하나씩 본다. 확인 항목:
+- **시트를 Read 로 직접 연다.** 슬라이드마다 PNG 를 하나씩 여는 대신 시트로 덱 전체를 한 번에 본다. 칸이 많으면 `sheet_01.png`, `sheet_02.png` … 로 나뉘고 출력 JSON 의 `sheets` 에 경로가 있다
+  - `sheet.png` (슬라이드 전체, 최종 스텝): 같은 레이아웃이 이어지는 곳, 글이 몰린 장과 빈 장의 편차, 제목만 읽어도 이야기가 이어지는지(라벨에 번호·타입·제목이 있다)
+  - `steps.png` (슬라이드마다 스텝 0→N 한 줄, 많으면 처음·끝 포함 6칸): 중간 스텝에서 요소가 겹치거나, 첫 스텝이 빈 화면이거나, 스텝이 바뀌어도 화면이 거의 그대로인 곳
+  - 시트에서 이상한 슬라이드만 `shots/slide-NN.png` 를 열어 자세히 본다
+- topology/flow 슬라이드 확인 항목:
   - 간선 라벨이 노드나 다른 라벨을 가리지 않는가 → 라벨을 짧게(2~3단어), 또는 노드 수를 줄인다
   - 노드 이름이 말줄임(…)으로 잘렸는가 → `label` 은 10자 안팎, 세부는 `tech` 로
   - 한 계층에 노드가 6개를 넘어 납작해졌는가 → `nodes` 부분집합 슬라이드로 분리
   - 흐름이 지그재그로 꼬였는가 → 해당 노드에 `tier` 를 명시해 열 위치를 고정
-- playwright 가 없으면 `pip install playwright && python -m playwright install chromium` 을 안내하고, 설치가 불가하면 검수 단계를 건너뛰었다고 명시한다.
+- `scene` 슬라이드가 있으면 `render_check.py` 에 `--determinism` 을 더한다. 같은 시각인데 화면이 다르다는 problem 은 결정성 규약을 어긴 것이므로 스크립트를 고친다
+- 결함 수정은 최대 3회 반복한다. 그래도 남으면 5-b 로 넘어가 비평에서 그 장을 다시 만들지 정한다
+- playwright 가 없으면 `pip install playwright && python -m playwright install chromium` 을 안내하고, 설치가 불가하면 검수 단계를 건너뛰었다고 명시한다. 이때는 5-b 비평도 할 수 없으므로 함께 건너뛰었다고 적는다.
+
+### 5-b. 비평
+
+결함이 없다고 청중 앞에서 통하는 것은 아니다. `references/critique.md` 를 읽고 따른다.
+
+1. 시트(`sheet*.png`, `steps*.png`)를 Read 로 보고 질문 8개에 답한다. 매번 **가장 약한 장**을 하나 고른다
+2. 장마다 유지 / 고침 / 다시 만듦을 정하고 `.deck/critique_NN.md` 에 남긴다. 가장 약한 장이 "유지"가 아니면 수치만 만지지 말고 **타입이나 시각화 방식을 바꿔** 다시 만든다
+3. 고친 뒤 5단계 빌드 → 시트 → 비평을 다시 돈다. 모든 장이 "유지"이고 `--strict` 가 통과하면 넘어간다 (최대 4라운드, 남은 문제는 보고에 적는다)
+4. 넘어가기 전에 한 번은 **deck-critic** 서브에이전트(작업 과정을 보지 않은 새 에이전트)에게 시트 경로 전부, `outline.md`, `references/critique.md` 경로만 주고 판정을 받는다. `deck.json`·저장소·메인의 판정은 주지 않는다. 돌려받은 판정을 그 라운드의 `critique_NN.md` 에 옮겨 적고, "다시 만듦"이 나온 장은 2~3번을 한 번 더 한다
 
 ## 6단계 — 독립 사실 검증
 
@@ -155,7 +199,7 @@ python3 $S/render_check.py <repo>/.deck/out/deck.html --shots <repo>/.deck/out/s
 
 - 필요 시 PDF: `python3 $S/render_check.py <html> --pdf <repo>/.deck/out/deck.pdf`
 - 제출용 PPTX: `python3 $S/export_pptx.py <html> -o <repo>/.deck/out/deck.pptx` (`pip install python-pptx playwright`). 슬라이드마다 최종 상태 이미지와 발표자 노트가 들어가며 모션과 텍스트 편집은 되지 않는다. 사용자에게 이 한계를 한 줄로 알린다
-- 사용자에게: 결과 파일 경로, 핵심 메시지 한 문장, 슬라이드 수, `[확인 필요]` 목록, 발표 조작법 한 줄
+- 사용자에게: 결과 파일 경로, 핵심 메시지 한 문장, 슬라이드 수, `[확인 필요]` 목록, 비평에서 다시 만든 장과 이유(한 줄씩)와 남은 약점, 발표 조작법 한 줄
   (→/Space 다음 · ← 이전 · `o` 전체 보기 · `s` 발표자 노트 · `f` 전체화면 · `t` 테마 전환 · 브라우저 인쇄로 PDF)
 - 진행 과정 요약은 하지 않는다.
 

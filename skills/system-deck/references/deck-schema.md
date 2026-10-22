@@ -78,7 +78,8 @@
 ```js
 const gsap = ctx.lib.gsap;                 // libs 의 name 으로 접근 (three 는 모듈 네임스페이스 = THREE)
 const g = ctx.canvas2d();                  // 고해상도 2D 컨텍스트. 좌표는 무대 px (ctx.width × ctx.height)
-ctx.loop((t, dt) => { /* 매 프레임: 활성 슬라이드일 때만 호출. t = 진입 후 초 */ });
+ctx.loop((t, dt, { k, ts, from }) => { /* 매 프레임: 활성 슬라이드일 때만. t = 진입 후 초, k = 현재 스텝,
+                                          ts = 스텝 k 가 시작된 뒤 초, from = 직전 스텝 */ });
 return {
   enter() {},                              // 슬라이드에 들어올 때마다
   step(k, still) {},                       // 스텝이 바뀔 때마다 (k = 0..steps). still 이면 애니메이션 없이 최종 상태로
@@ -95,7 +96,9 @@ return {
 | `canvas()` | 장면을 덮는 `<canvas>` 를 만들어 준다(WebGL·Three.js 용). 픽셀 크기 = 영역 × `pixelRatio()` |
 | `canvas2d()` | 위 캔버스의 2D 컨텍스트, 배율 적용 완료 |
 | `pixelRatio()` | 기기 픽셀 비 × 무대 확대율 (최대 2) |
-| `loop(fn)` | 프레임 콜백 등록. 해제 함수를 돌려준다 |
+| `loop(fn)` | 프레임 콜백 `fn(t, dt, {k, ts, from})` 등록. 해제 함수를 돌려준다. 그림은 `t`·`k`·`ts`·`from` 으로만 정한다(아래 결정성 규약) |
+| `rand(i, salt)` | 결정적 무작위 0~1. 같은 `(i, salt)` 에 늘 같은 값. `Math.random` 대신 쓴다 |
+| `noise(t, seed)` | 결정적 잡음 -1~1. `t` 에 대해 부드럽게 변한다(흔들림·떠다님) |
 | `theme()` | 현재 테마 색 `{accent, fg, muted, bg, panel, line, edge, name}` |
 | `kindColor(kind)` | 노드 종류별 색 (`service`, `db` …) — 토폴로지와 같은 색 |
 | `model` | 시스템 모델 `{system, nodes, edges, flows}`. 실제 구성으로 시각화할 때 쓴다 |
@@ -106,6 +109,24 @@ return {
 - **정지 화면**: `?still=1`·인쇄·`render_check.py`·`prefers-reduced-motion` 에서는 진행 중인 GSAP 애니메이션을 끝 상태로 보내고, 루프는 `t=1.5` 로 한 프레임만 그린다. `step(k, still)` 에서 `duration: still ? 0 : 1` 처럼 처리하면 확실하다
 - **지연 초기화**: 장면은 처음 보일 때 만들어진다(WebGL 컨텍스트 수 제한·로드 시간). 루프는 활성 슬라이드에서만 돈다
 - 오버뷰(`o`)에는 캔버스의 현재 픽셀이 복사된다. WebGL 은 `preserveDrawingBuffer: true` 를 줘야 오버뷰·PDF 에 남는다
+- **시각 지정**: `deck.seek(i, k, t[, from])` 은 슬라이드 i 에서 스텝 from(기본 k-1)→k 로 넘어간 지 t 초 된 화면을 그리고 멈춘다. GSAP 애니메이션은 일시정지한 채 그 시각으로 옮기고, 루프는 `(t, 0, {k, ts: t, from})` 로 한 번 부른다. 검수·내보내기 도구가 쓴다
+
+### 결정성 규약
+
+장면의 한 프레임은 **`t`, `k`, `ts`, `from` 만으로 정해져야 한다.** 그래야 같은 시각을 다시 찍으면 같은 화면이 나와 검수 스크린샷·PDF·영상 내보내기가 재현되고, 발표 중 앞뒤로 오가도 화면이 어긋나지 않는다.
+
+| 하지 않는다 | 대신 |
+|---|---|
+| `Math.random()` | `ctx.rand(i, salt)` — 점 i 의 고정된 무작위 값 |
+| 프레임마다 위치를 더하기 (`x += v * dt`) | 시각의 함수로 바로 계산 (`x = x0 + v * t`, 화면 밖은 나머지 연산으로 감기) |
+| 스텝 전환을 누적 보간 (`x += (tx - x) * dt * k`) | `ts` 로 진행률을 구해 `from` 상태와 `k` 상태 사이를 보간 (`e = ease(ts / 1.2)`) |
+| `Date.now()`, `performance.now()`, `setTimeout`, 자체 `requestAnimationFrame` | `ctx.loop` 의 `t`·`ts` |
+| GSAP 으로 바꾸는 값의 처음 값을 앞선 애니메이션에 맡기기 | `enter()` 에서 처음 값을 직접 정한다 (`view.r = 24`) |
+| CSS `transition`·`@keyframes` 로 장면 안 요소 움직이기 | 루프나 GSAP |
+
+- 빌드 린트가 위 패턴(`Math.random`, 시계, 타이머, `dt` 누적)을 경고한다
+- `render_check.py --determinism` 이 장면 슬라이드를 페이지 두 개에서 다른 순서로 같은 (스텝, 시각)에 찍어 비교한다. 다르면 problem 으로 알린다
+- 예시 `scenes/voices-canvas.js` 가 이 규약대로 쓴 Canvas 2D 장면이다
 
 예시: `examples/recap/deck-scene.json` 과 `scenes/` (WebGL 셰이더, GSAP+SVG 파이프라인, Canvas 2D 파티클, Three.js 3D 토폴로지).
 

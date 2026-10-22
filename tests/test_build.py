@@ -111,6 +111,51 @@ class LintTest(unittest.TestCase):
         self.assertEqual(errs({"type": "end", "asks": ["a"]}), [])
 
 
+class RhythmTest(unittest.TestCase):
+    def rhythm(self, *slides, steps=None, **top):
+        d = {**deck(*slides), **top}
+        return "\n".join(bd.rhythm(d, steps or [0] * len(slides)))
+
+    def test_same_type_run(self):
+        st = {"type": "stats", "items": []}
+        self.assertIn("'stats' 가 3장 연속", self.rhythm(st, st, st))
+        self.assertEqual(self.rhythm(st, st, {"type": "bento"}, st), "")
+
+    def test_adjacent_bullets(self):
+        b = {"type": "bullets", "bullets": ["x"]}
+        w = self.rhythm(b, b, b)
+        self.assertEqual(w.count("텍스트 장"), 2)
+        self.assertNotIn("연속", w)
+        self.assertEqual(self.rhythm(b, {"type": "topology"}, b), "")
+
+    def test_statement_count(self):
+        s, e = {"type": "statement", "text": "x"}, {"type": "end"}
+        self.assertEqual(self.rhythm(s, e, s), "")
+        self.assertIn("statement 가 3장", self.rhythm(s, e, s, e, s))
+
+    def test_steps_cap_per_type(self):
+        self.assertIn("스텝 8개 > 7", self.rhythm({"type": "bento"}, steps=[8]))
+        self.assertEqual(self.rhythm({"type": "flow"}, steps=[12]), "")
+        self.assertIn("스텝 13개 > 12", self.rhythm({"type": "flow"}, steps=[13]))
+
+    def test_transition_kinds(self):
+        sl = [{"type": t, "transition": tr} for t, tr in (("section", "zoom"), ("bento", "fade"), ("end", "slide-up"))]
+        self.assertIn("전환 4종", self.rhythm({"type": "title"}, *sl))
+        self.assertEqual(self.rhythm(*sl), "")
+        self.assertEqual(self.rhythm({"type": "title"}, *sl[:2], transition="fade"), "")
+
+    def test_build_reports_rhythm(self):
+        st = {"type": "stats", "items": [{"value": "1", "label": "a", "source": "s"}], "notes": "n",
+              "title": "처리 시간이 줄었다"}
+        p = ROOT / "tests" / "_rhythm.json"
+        p.write_text(json.dumps({"model": MODEL, "slides": [st, st, st]}, ensure_ascii=False), encoding="utf-8")
+        try:
+            self.assertEqual(bd.build(p, None, True), 0)
+            self.assertEqual(bd.build(p, None, True, strict=True), 1)
+        finally:
+            p.unlink(missing_ok=True)
+
+
 class RenderTest(unittest.TestCase):
     def render(self, s):
         return bd.slide_html(0, s, MODEL, deck(s))
@@ -226,6 +271,28 @@ class RenderTest(unittest.TestCase):
         self.assertIn("fallback", w)
         w = "\n".join(bd.lint(deck({"type": "scene", "script": "a", "notes": "n"})))
         self.assertNotIn("fallback", w)
+
+    def test_scene_lint_determinism(self):
+        def w(code):
+            return "\n".join(bd.lint(deck({"type": "scene", "script": code, "notes": "n"})))
+        self.assertIn("ctx.rand", w("const x = Math.random() * W;"))
+        self.assertIn("시계", w("const t0 = performance.now();"))
+        self.assertIn("타이머", w("setTimeout(draw, 16);"))
+        self.assertIn("dt 누적", w("ctx.loop((t, dt) => { p.x += v * dt; });"))
+        clean = ("const x = ctx.rand(i, 1) * W; // Math.random 대신\n"
+                 "ctx.loop((t, dt, { ts }) => { const x = x0 + v * t; });")
+        self.assertNotIn("결정성", w(clean))
+
+    def test_examples_follow_determinism(self):
+        for s in json.loads((EX / "deck-scene.json").read_text(encoding="utf-8"))["slides"]:
+            if s["type"] == "scene":
+                code = (EX / s["script_file"]).read_text(encoding="utf-8")
+                self.assertNotIn("결정성", "\n".join(bd.lint(deck({**s, "script": code}))), s["script_file"])
+
+    def test_template_exposes_seek(self):
+        tpl = (SCRIPTS / "deck_template.html").read_text(encoding="utf-8")
+        self.assertIn("seek, count", tpl)
+        self.assertIn("rand: (i, salt = 0)", tpl)
 
     def test_html_escaped(self):
         html, _ = self.render({"type": "bento", "cards": [{"title": "<script>x</script>"}, {"title": "b"}]})

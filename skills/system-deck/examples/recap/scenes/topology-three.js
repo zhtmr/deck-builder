@@ -124,6 +124,7 @@ ctx.loop(t => {
 });
 
 return {
+  enter() { view.r = 24; view.y = 4.5; },   // GSAP 이 바꾸는 값은 처음 값을 직접 정한다(결정성 규약)
   step(k, still) {
     playing = k >= 1;
     gsap.to(view, { r: playing ? 19 : 24, y: playing ? 3 : 4.5, duration: still ? 0 : 1.4, ease: 'power3.inOut', overwrite: true });
