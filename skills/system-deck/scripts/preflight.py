@@ -61,7 +61,7 @@ def check(offline: bool) -> dict:
     items = []
 
     def add(key, ok, need, what, fix="", detail=""):
-        items.append({"key": key, "ok": bool(ok), "need": need, "what": what, "fix": fix, "detail": detail})
+        items.append({"key": key, "ok": None if ok is None else bool(ok), "need": need, "what": what, "fix": fix, "detail": detail})
 
     py_ok = sys.version_info >= (3, 9)
     add("python", py_ok, "필수", "빌드·스캔·인제스천", "Python 3.9 이상 설치",

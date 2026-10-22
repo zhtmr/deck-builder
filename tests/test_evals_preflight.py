@@ -1,9 +1,13 @@
+import contextlib
+import io
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 EX = ROOT / "skills" / "system-deck" / "examples" / "recap"
@@ -33,6 +37,25 @@ class PreflightPathsTest(unittest.TestCase):
     def test_no_cdn_and_offline(self):
         self.assertIn("CDN 불가", "\n".join(pf.paths({**self.OK, "cdn": False}, offline=False)))
         self.assertIn("네트워크 미확인", "\n".join(pf.paths({**self.OK, "cdn": None}, offline=True)))
+
+    def test_offline_check_preserves_skipped_cdn(self):
+        with mock.patch.object(pf, "chromium_ok", return_value=(False, "unavailable")), \
+                mock.patch.object(pf, "has_module", return_value=False), \
+                mock.patch.object(pf.shutil, "which", return_value="/usr/bin/git"), \
+                mock.patch.object(pf, "reachable") as reachable:
+            result = pf.check(offline=True)
+        items = {item["key"]: item["ok"] for item in result["items"]}
+        self.assertIsNone(items["cdn"])
+        self.assertIs(items["git"], True)
+        self.assertIs(items["playwright"], False)
+        reachable.assert_not_called()
+        stdout = io.StringIO()
+        with mock.patch.object(pf, "check", return_value=result), \
+                mock.patch.object(sys, "argv", ["preflight.py", "--offline"]), \
+                contextlib.redirect_stdout(stdout), self.assertRaises(SystemExit) as exited:
+            pf.main()
+        self.assertEqual(exited.exception.code, 0)
+        self.assertIn("· cdn", stdout.getvalue())
 
 
 class CheckDeckTest(unittest.TestCase):
@@ -81,6 +104,31 @@ class CheckDeckTest(unittest.TestCase):
     def test_missing_deck_json(self):
         (self.d / "deck.json").unlink()
         self.assertEqual(self.results()["deck_json"]["ok"], False)
+
+    def test_repo_untouched_only_ignores_deck_directory(self):
+        def git(*args):
+            subprocess.run(["git", "-C", str(self.tmp), *args], check=True, capture_output=True)
+
+        git("init")
+        (self.tmp / ".gitignore").write_text("# baseline\n", encoding="utf-8")
+        fixture = self.tmp / "meeting-notes-plan.md"
+        shutil.copy(ROOT / "evals" / "files" / fixture.name, fixture)
+        git("add", ".gitignore", fixture.name)
+        git("-c", "user.name=Eval Test", "-c", "user.email=eval@example.invalid",
+            "-c", "commit.gpgsign=false", "commit", "-m", "Fixture baseline")
+        self.assertTrue(self.results(repo=self.tmp)["repo_untouched"]["ok"])
+        for name in (".gitignore", fixture.name, ".deck.json", ".deck-backup", "other.txt"):
+            with self.subTest(path=name):
+                path = self.tmp / name
+                baseline = path.read_bytes() if path.exists() else None
+                path.write_text("changed\n", encoding="utf-8")
+                result = self.results(repo=self.tmp)["repo_untouched"]
+                self.assertFalse(result["ok"])
+                self.assertIn(name, result["detail"])
+                if baseline is None:
+                    path.unlink()
+                else:
+                    path.write_bytes(baseline)
 
 
 if __name__ == "__main__":

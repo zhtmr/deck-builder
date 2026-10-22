@@ -103,7 +103,7 @@ def check(deck_dir: Path, slides: str = "", no_code: bool = False, doc_only: boo
     if repo:
         r = subprocess.run(["git", "-C", str(repo), "status", "--porcelain"], capture_output=True, text=True)
         changed = [l[3:] for l in r.stdout.splitlines()
-                   if not l[3:].startswith(".deck") and l[3:].strip() != ".gitignore"]
+                   if not l[3:].startswith(".deck/")]
         add("repo_untouched", r.returncode == 0 and not changed,
             "바뀐 파일: " + ", ".join(changed[:5]) if changed else "")
     return res
