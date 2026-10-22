@@ -1,6 +1,6 @@
 {
   "name": "deck-builder",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "구현한 시스템의 코드베이스·구현 이력, 또는 문서(HWPX/PDF/PPTX/DOCX/MD)를 읽어 모션 그래픽 HTML 발표 장표를 만들어 주는 에이전트",
   "author": { "name": "gdgd" },
   "keywords": ["presentation", "slides", "architecture", "topology", "codebase"]

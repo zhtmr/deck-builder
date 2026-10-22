@@ -5,7 +5,7 @@
 - 코드에서 노드·간선·요청 흐름을 `파일:라인` 근거와 함께 뽑아 구성도를 자동으로 그립니다
 - 청중에 맞는 이야기 틀을 고르고, 슬라이드 제목만 읽어도 주장이 이어지도록 제목 목록을 먼저 확인받은 뒤 장표를 만듭니다
 - 장표의 모든 사실 문장은 별도 에이전트가 원문과 대조해 검증합니다. 근거 없는 숫자는 만들지 않습니다
-- 스크린샷을 직접 보고 겹침·잘림을 고친 뒤 넘겨 줍니다
+- 스크린샷을 직접 보고 겹침·잘림을 고치고, 가장 약한 장을 골라 다시 만드는 비평을 거친 뒤 넘겨 줍니다
 - 필요하면 GSAP·Canvas·SVG·WebGL·Three.js 로 직접 그린 장면도 넣을 수 있습니다
 
 **[라이브 데모에서 직접 조작해 보기 →](https://zhtmr.github.io/deck-builder/)**
@@ -124,7 +124,7 @@ PDF 로도 뽑아줘
 2. `scan_repo.py` 로 진입점·연동·설정·배포·git 이력 1차 정찰 (문서가 있으면 `ingest.py` 로 변환)
 3. `system-explorer`(구조 → `system-model.json`)와 `workflow-historian`(이력·문서 → `story.json`) 병렬 실행
 4. 핵심 메시지 한 문장 → 청중별 프레임 선택 → 주장형 제목 목록(`outline.md`) → 헤드라인 테스트 → **사용자 확인** → `deck.json` 작성
-5. 빌드 → 헤드리스 스크린샷을 직접 보고 겹침·잘림 수정 (최대 3회)
+5. 빌드 → 슬라이드·스텝 시트를 직접 보고 겹침·잘림 수정 → 비평 질문 8개로 장마다 유지/고침/다시 만듦을 판정하고 가장 약한 장을 다시 만듦 (`deck-critic` 이 작업 과정을 모르는 눈으로 한 번 더 판정)
 6. `deck-reviewer` 가 근거 없는 주장·코드 불일치와 제목 흐름 끊김을 찾아냄 → 수정
 7. HTML(+PDF/PPTX) 전달, 핵심 메시지와 `[확인 필요]` 목록 보고
 
@@ -203,10 +203,11 @@ deck-builder/
 ├─ agents/
 │  ├─ system-explorer.md           # 코드·설정 → system-model.json (노드/간선/흐름 + 파일:라인 근거)
 │  ├─ workflow-historian.md        # git 이력·문서 → story.json (문제·결정·타임라인·지표 + 출처)
-│  └─ deck-reviewer.md             # 완성 장표의 사실 문장을 원문과 독립 대조 + 제목 흐름 점검
+│  ├─ deck-reviewer.md             # 완성 장표의 사실 문장을 원문과 독립 대조 + 제목 흐름 점검
+│  └─ deck-critic.md               # 렌더 시트만 보고 장마다 유지/고침/다시 만듦 판정 + 가장 약한 장
 ├─ skills/system-deck/
 │  ├─ SKILL.md                     # 7단계 오케스트레이션
-│  ├─ references/                  # 모델·장표 스키마, 청중별 스토리 프레임·제목·문장 규칙
+│  ├─ references/                  # 모델·장표 스키마, 청중별 스토리 프레임·제목·문장 규칙, 비평 질문·뻔한 장표
 │  ├─ scripts/
 │  │  ├─ scan_repo.py              # 결정적 1차 정찰 (Spring/FastAPI/Express/compose/k8s/git)
 │  │  ├─ ingest.py                 # 문서(HWPX/PDF/PPTX/DOCX/MD) → source.md + 표 JSON
